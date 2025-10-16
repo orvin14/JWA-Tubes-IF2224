@@ -78,6 +78,14 @@ class Lexer:
                 lexeme = source_code[current_pos:last_accepted_pos]
 
                 if token_type == 'COMMENT':
+                    comment_lexeme = source_code[current_pos:last_accepted_pos]
+                    if comment_lexeme.startswith('{'):
+                        tokens.append(('COMMENT_START', '{'))
+                        tokens.append(('COMMENT_END', '}'))
+                    elif comment_lexeme.startswith('(*'):
+                        tokens.append(('COMMENT_START', '(*'))
+                        tokens.append(('COMMENT_END', '*)'))
+                    
                     current_pos = last_accepted_pos
                     continue
                 

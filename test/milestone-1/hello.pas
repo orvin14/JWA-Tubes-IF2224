@@ -1,5 +1,6 @@
 program Hello;
-
+{Halo Dunia}
+(* Ini juga komentar *)
 var
   a, b: integer;
 
