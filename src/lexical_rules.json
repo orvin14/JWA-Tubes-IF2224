@@ -1,0 +1,173 @@
+{
+  "start_state": "S_START",
+  "char_classes": {
+    "letter": "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_",
+    "digit": "0123456789",
+    "whitespace": " \t\n\r"
+  },
+  "states": {
+    "S_START": {
+      "is_final": false,
+      "transitions": [
+        { "class": "whitespace", "next_state": "S_START" },
+        { "class": "letter", "next_state": "S_IDENTIFIER" },
+        { "class": "digit", "next_state": "S_NUM" },
+        { "chars": "+", "next_state": "S_PLUS" },
+        { "chars": "-", "next_state": "S_MINUS" },
+        { "chars": "*", "next_state": "S_MULTI" },
+        { "chars": "/", "next_state": "S_DIVIDE" },
+        { "chars": "=", "next_state": "S_EQUAL" },
+        { "chars": "<", "next_state": "S_LT" },
+        { "chars": ">", "next_state": "S_GT" },
+        { "chars": ":", "next_state": "S_COLON" },
+        { "chars": ";", "next_state": "S_SEMICOLON" },
+        { "chars": ",", "next_state": "S_COMMA" },
+        { "chars": ".", "next_state": "S_DOT" },
+        { "chars": "'", "next_state": "S_STRING" },
+        { "chars": "(", "next_state": "S_LPAREN" },
+        { "chars": ")", "next_state": "S_RPAREN" },
+        { "chars": "[", "next_state": "S_LBRACKET" },
+        { "chars": "]", "next_state": "S_RBRACKET" },
+        { "chars": "{", "next_state": "S_LBRACE" },
+        { "chars": "}", "next_state": "S_RBRACE" }
+      ]
+    },
+
+    "S_IDENTIFIER": {
+      "is_final": true,
+      "token_type": "IDENTIFIER",
+      "transitions": [
+        { "class": "letter", "next_state": "S_IDENTIFIER" },
+        { "class": "digit", "next_state": "S_IDENTIFIER" }
+      ]
+    },
+
+    "S_NUM": {
+      "is_final": true,
+      "token_type": "NUMBER",
+      "transitions": [
+        { "class": "digit", "next_state": "S_NUM" },
+        { "chars": ".", "next_state": "S_REAL_DOT" }
+      ]
+    },
+    "S_REAL_DOT": {
+      "is_final": false,
+      "transitions": [
+        { "class": "digit", "next_state": "S_REAL_AFTER_DOT" }
+      ]
+    },
+    "S_REAL_AFTER_DOT": {
+      "is_final": true,
+      "token_type": "NUMBER",
+      "transitions": [
+        { "class": "digit", "next_state": "S_REAL_AFTER_DOT" }
+      ]
+    },
+
+    "S_PLUS": { "is_final": true, "token_type": "ARITHMETIC_OPERATOR", "transitions": [] },
+    "S_MINUS": { "is_final": true, "token_type": "ARITHMETIC_OPERATOR", "transitions": [] },
+    "S_MULTI": { "is_final": true, "token_type": "ARITHMETIC_OPERATOR", "transitions": [] },
+    "S_DIVIDE": { "is_final": true, "token_type": "ARITHMETIC_OPERATOR", "transitions": [] },
+    "S_EQUAL": { "is_final": true, "token_type": "RELATIONAL_OPERATOR", "transitions": [] },
+    "S_SEMICOLON": { "is_final": true, "token_type": "SEMICOLON", "transitions": [] },
+    "S_COMMA": { "is_final": true, "token_type": "COMMA", "transitions": [] },
+    "S_RPAREN": { "is_final": true, "token_type": "RPARENTHESIS", "transitions": [] },
+    "S_LBRACKET": { "is_final": true, "token_type": "LBRACKET", "transitions": [] },
+    "S_RBRACKET": { "is_final": true, "token_type": "RBRACKET", "transitions": [] },
+    "S_RBRACE": { "is_final": true, "token_type": "COMMENT_END", "transitions": [] },
+    "S_LBRACE": {
+        "is_final": false,
+        "transitions": [
+            { "chars": "}", "next_state": "S_COMMENT_BRACE_END" },
+            { "default": true, "next_state": "S_LBRACE" }
+        ]
+    },
+    "S_COMMENT_BRACE_END": { "is_final": true, "token_type": "COMMENT", "transitions": [] },
+
+    "S_COLON": {
+      "is_final": true,
+      "token_type": "COLON",
+      "transitions": [
+        { "chars": "=", "next_state": "S_ASSIGN" }
+      ]
+    },
+    "S_ASSIGN": { "is_final": true, "token_type": "ASSIGN_OPERATOR", "transitions": [] },
+
+    "S_LT": {
+      "is_final": true,
+      "token_type": "RELATIONAL_OPERATOR",
+      "transitions": [
+        { "chars": "=", "next_state": "S_LE" },
+        { "chars": ">", "next_state": "S_NE" }
+      ]
+    },
+    "S_LE": { "is_final": true, "token_type": "RELATIONAL_OPERATOR", "transitions": [] },
+    "S_NE": { "is_final": true, "token_type": "RELATIONAL_OPERATOR", "transitions": [] },
+
+    "S_GT": {
+      "is_final": true,
+      "token_type": "RELATIONAL_OPERATOR",
+      "transitions": [
+        { "chars": "=", "next_state": "S_GE" }
+      ]
+    },
+    "S_GE": { "is_final": true, "token_type": "RELATIONAL_OPERATOR", "transitions": [] },
+    
+    "S_DOT": {
+        "is_final": true,
+        "token_type": "DOT",
+        "transitions": [
+            { "chars": ".", "next_state": "S_RANGE" }
+        ]
+    },
+    "S_RANGE": { "is_final": true, "token_type": "RANGE_OPERATOR", "transitions": [] },
+
+    "S_STRING": {
+      "is_final": false,
+      "transitions": [
+        { "chars": "'", "next_state": "S_STRING_END" },
+        { "default": true, "next_state": "S_STRING" }
+      ]
+    },
+    "S_STRING_END": { "is_final": true, "token_type": "STRING_LITERAL", "transitions": [] },
+
+    "S_LPAREN": {
+      "is_final": true,
+      "token_type": "LPARENTHESIS",
+      "transitions": [
+        { "chars": "*", "next_state": "S_COMMENT_STAR_START" }
+      ]
+    },
+    "S_COMMENT_STAR_START": {
+        "is_final": false,
+        "transitions": [
+            { "chars": "*", "next_state": "S_COMMENT_STAR_ATTEMPT_END"},
+            { "default": true, "next_state": "S_COMMENT_STAR_START" }
+        ]
+    },
+    "S_COMMENT_STAR_ATTEMPT_END": {
+        "is_final": false,
+        "transitions": [
+            { "chars": ")", "next_state": "S_COMMENT_STAR_END" },
+            { "default": true, "next_state": "S_COMMENT_STAR_START" }
+        ]
+    },
+    
+    "S_COMMENT_STAR_END": { "is_final": true, "token_type": "COMMENT", "transitions": [] },
+
+    "S_COMMENT_MULTI": {
+      "is_final": false,
+      "transitions": [
+        { "chars": "*", "next_state": "S_COMMENT_MULTI_END" },
+        { "default": true, "next_state": "S_COMMENT_MULTI" }
+      ]
+    },
+    "S_COMMENT_MULTI_END": {
+      "is_final": false,
+      "transitions": [
+        { "chars": ")", "next_state": "S_START" },
+        { "default": true, "next_state": "S_COMMENT_MULTI" }
+      ]
+    }
+  }
+}

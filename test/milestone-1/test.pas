@@ -1,0 +1,4 @@
+program AllTokensTest;
+'
+'
+end.
