@@ -3,7 +3,6 @@
 
 * **Kode Kelompok:** JWA 
 * **Kelas:** K01
-* **Anggota Kelompok:**
 |            Nama             |      NIM      |
 | --------------------------  | ------------- |
 | Muhammad Alfansya           |    13523005   |
