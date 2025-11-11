@@ -3,16 +3,20 @@ import sys
 
 LOOKUP_TABLE = {
     "program": "KEYWORD", 
-    "var": "KEYWORD", 
-    "begin": "KEYWORD", 
-    "end": "KEYWORD",
-    "if": "KEYWORD", "then": "KEYWORD", "else": "KEYWORD", "while": "KEYWORD",
-    "do": "KEYWORD", "for": "KEYWORD", "to": "KEYWORD", "downto": "KEYWORD",
+    "variabel": "KEYWORD", 
+    "mulai": "KEYWORD", 
+    "selesai": "KEYWORD",
+    "kasus": "KEYWORD",
+    "rekaman" : "KEYWORD",
+    "sampai": "KEYWORD",
+    "writeln": "KEYWORD",
+    "jika": "KEYWORD", "maka": "KEYWORD", "selain_itu": "KEYWORD", "selama": "KEYWORD",
+    "lakukan": "KEYWORD", "untuk": "KEYWORD", "ke": "KEYWORD", "turun_ke": "KEYWORD",
     "integer": "KEYWORD", "real": "KEYWORD", "boolean": "KEYWORD", "char": "KEYWORD",
-    "array": "KEYWORD", "of": "KEYWORD", "procedure": "KEYWORD", "function": "KEYWORD",
-    "const": "KEYWORD", "type": "KEYWORD",
-    "div": "ARITHMETIC_OPERATOR", "mod": "ARITHMETIC_OPERATOR",
-    "and": "LOGICAL_OPERATOR", "or": "LOGICAL_OPERATOR", "not": "LOGICAL_OPERATOR"
+    "larik": "KEYWORD", "dari": "KEYWORD", "prosedur": "KEYWORD", "fungsi": "KEYWORD",
+    "konstanta": "KEYWORD", "tipe": "KEYWORD",
+    "bagi": "ARITHMETIC_OPERATOR", "mod": "ARITHMETIC_OPERATOR",
+    "dan": "LOGICAL_OPERATOR", "atau": "LOGICAL_OPERATOR", "tidak": "LOGICAL_OPERATOR"
 }
 
 class Lexer:

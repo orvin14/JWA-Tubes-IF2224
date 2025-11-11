@@ -1,6 +1,7 @@
 import sys
 import os
 from lexical_analyzer import Lexer
+from parser import Parser
 
 def main():
     #input pascal file name
@@ -39,6 +40,20 @@ def main():
 
     except Exception as e:
         print(f"Terjadi error saat proses tokenisasi: {e}")
+        sys.exit(1)
+    try:
+        print("------- Memulai Syntax Analysis -------")
+        parser = Parser(token_list)
+        print("\n----------- PARSE TREE -----------")
+        parser.parse()
+        print("------------------------------------------\n") 
+
+    except SyntaxError as e:
+        print(f"\n[SYNTAX ERROR]: Berhenti.")
+        print(f"Pesan: {e}")
+        sys.exit(1)
+    except Exception as e:
+        print(f"\nTerjadi error internal saat proses parsing: {e}")
         sys.exit(1)
 
 if __name__ == "__main__":
