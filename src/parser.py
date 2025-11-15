@@ -204,8 +204,8 @@ class Parser:
         node.add_child(self.parse_expression())
         node.add_child(self.eat("KEYWORD", "maka"))
         node.add_child(self.parse_statement())
-        if self.current_token and self.current_token[0] == 'KEYWORD' and self.current_token[1] == 'selainitu':
-            node.add_child(self.eat("KEYWORD", "selainitu"))
+        if self.current_token and self.current_token[0] == 'KEYWORD' and self.current_token[1] == 'selain_itu':
+            node.add_child(self.eat("KEYWORD", "selain_itu"))
             node.add_child(self.parse_statement())
         return node
     
@@ -226,10 +226,10 @@ class Parser:
         
         if self.current_token and self.current_token[0] == 'KEYWORD' and self.current_token[1] == 'ke':
             node.add_child(self.eat("KEYWORD", "ke"))
-        elif self.current_token and self.current_token[0] == 'KEYWORD' and self.current_token[1] == 'turunke':
-            node.add_child(self.eat("KEYWORD", "turunke"))
+        elif self.current_token and self.current_token[0] == 'KEYWORD' and self.current_token[1] == 'turun_ke':
+            node.add_child(self.eat("KEYWORD", "turun_ke"))
         else:
-            raise SyntaxError("Syntax Error: Expected 'ke' or 'turunke' in for loop")
+            raise SyntaxError("Syntax Error: Expected 'ke' or 'turun_ke' in for loop")
             
         node.add_child(self.parse_expression())
         node.add_child(self.eat("KEYWORD", "lakukan"))

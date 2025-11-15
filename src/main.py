@@ -16,7 +16,7 @@ def main():
     root_dir = os.path.dirname(script_dir)
 
     #Path to input .pas file and lexical rules file
-    input_file_path = os.path.join(root_dir, 'test', 'milestone-1', pascal_filename)
+    input_file_path = os.path.join(root_dir, 'test', 'milestone-2', pascal_filename)
     rules_file_path = os.path.join(script_dir, 'lexical_rules.json')
 
     # Read source code from .pas file
