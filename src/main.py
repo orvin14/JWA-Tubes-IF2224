@@ -42,9 +42,9 @@ def main():
         print(f"Terjadi error saat proses tokenisasi: {e}")
         sys.exit(1)
     try:
-        print("------- Memulai Syntax Analysis -------")
+        print("--------- Memulai Syntax Analysis ---------")
         parser = Parser(token_list)
-        print("\n----------- PARSE TREE -----------")
+        print("\n--------------- PARSE TREE ---------------")
         parser.parse()
         print("------------------------------------------\n") 
 

@@ -166,7 +166,7 @@ class Parser:
             if next_token and next_token[0] == 'ASSIGN_OPERATOR':
                 return self.parse_assignment_statement()
             else:
-                return self.parse_procedure_call()
+                return self.parse_procedure_or_function_call()
                 
         elif self.current_token[0] == 'KEYWORD':
             val = self.current_token[1]
@@ -178,8 +178,6 @@ class Parser:
                 return self.parse_for_statement()
             elif val == 'mulai':
                 return self.parse_compound_statement()
-            elif val == 'writeln':
-                return self.parse_procedure_call()
             else:
                 return Node("empty-statement")
         else:
@@ -190,21 +188,6 @@ class Parser:
         node.add_child(self.eat("IDENTIFIER"))
         node.add_child(self.eat("ASSIGN_OPERATOR"))
         node.add_child(self.parse_expression())
-        return node
-
-    def parse_procedure_call(self):
-        node = Node("procedure-call")
-        if self.current_token[0] == 'IDENTIFIER':
-            node.add_child(self.eat("IDENTIFIER"))
-        elif self.current_token[0] == 'KEYWORD' and self.current_token[1] == 'writeln':
-            node.add_child(self.eat("KEYWORD", "writeln"))
-        else:
-            raise SyntaxError(f"Syntax Error: Expected procedure name (IDENTIFIER or built-in) but got {self.current_token[0]}")
-        if self.current_token and self.current_token[0] == 'LPARENTHESIS':
-            node.add_child(self.eat("LPARENTHESIS"))
-            if self.current_token and self.current_token[0] != 'RPARENTHESIS':
-                node.add_child(self.parse_parameter_list())
-            node.add_child(self.eat("RPARENTHESIS"))
         return node
     
     def parse_parameter_list(self):
@@ -308,7 +291,7 @@ class Parser:
             next_token = self.peek()
             
             if next_token and next_token[0] == 'LPARENTHESIS':
-                return self.parse_function_call()
+                return self.parse_procedure_or_function_call()
             else:
                 node.add_child(self.eat("IDENTIFIER"))
         elif self.current_token[0] == 'NUMBER':
@@ -329,11 +312,16 @@ class Parser:
             raise SyntaxError(f"Syntax Error: Expected factor (ID, Number, '(', 'tidak', ...) but got {token_info}")
         return node
         
-    def parse_function_call(self):
-        node = Node("function-call") 
-        node.add_child(self.eat("IDENTIFIER"))
+    def parse_procedure_or_function_call(self):
+        node = Node("procedure/function-call") 
+        
+        if self.current_token[0] == 'IDENTIFIER':
+            node.add_child(self.eat("IDENTIFIER"))
+        else:
+            raise SyntaxError(f"Syntax Error: Expected procedure or function name but got {self.current_token[0]}")
+
         node.add_child(self.eat("LPARENTHESIS"))
         if self.current_token and self.current_token[0] != 'RPARENTHESIS':
-            node.add_child(self.parse_parameter_list())
+            node.add_child(self.parse_parameter_list())    
         node.add_child(self.eat("RPARENTHESIS"))
         return node

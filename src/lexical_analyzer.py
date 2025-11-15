@@ -9,7 +9,6 @@ LOOKUP_TABLE = {
     "kasus": "KEYWORD",
     "rekaman" : "KEYWORD",
     "sampai": "KEYWORD",
-    "writeln": "KEYWORD",
     "jika": "KEYWORD", "maka": "KEYWORD", "selain_itu": "KEYWORD", "selama": "KEYWORD",
     "lakukan": "KEYWORD", "untuk": "KEYWORD", "ke": "KEYWORD", "turun_ke": "KEYWORD",
     "integer": "KEYWORD", "real": "KEYWORD", "boolean": "KEYWORD", "char": "KEYWORD",
