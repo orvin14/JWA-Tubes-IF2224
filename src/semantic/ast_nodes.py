@@ -1,0 +1,160 @@
+from __future__ import annotations
+from typing import List, Optional
+from dataclasses import dataclass, field
+from tokens import Token
+
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from .symbol_table import BaseType
+
+@dataclass
+class ASTNode:
+    """Base class untuk semua AST nodes"""
+    node_type: str
+    children: List[ASTNode] = field(default_factory=list)
+    token: Optional[Token] = None
+    data_type: Optional['BaseType'] = None
+    tab_index: int = -1
+    block_index: int = -1
+    
+    def add_child(self, child: ASTNode):
+        if child:
+            self.children.append(child)
+        
+    def __repr__(self):
+        return f"{self.node_type}(type={self.data_type}, tab_idx={self.tab_index})"
+
+@dataclass
+class ProgramNode(ASTNode):
+    """Node untuk program utama"""
+    name: str = ""
+    
+    def __init__(self, node_type: str, name: str = "", **kwargs):
+        super().__init__(node_type, **kwargs)
+        self.name = name
+    
+    def __repr__(self):
+        return f"ProgramNode(name: '{self.name}')"
+
+@dataclass
+class VarDeclNode(ASTNode):
+    """Node untuk deklarasi variabel"""
+    identifier: str = ""
+    
+    def __init__(self, node_type: str, identifier: str = "", **kwargs):
+        super().__init__(node_type, **kwargs)
+        self.identifier = identifier
+    
+    def __repr__(self):
+        return f"VarDecl('{self.identifier}')"
+
+@dataclass
+class AssignmentNode(ASTNode):
+    """Node untuk assignment statement"""
+    
+    def __repr__(self):
+        if len(self.children) >= 2:
+            target = self.children[0]
+            value = self.children[1]
+            
+            if isinstance(target, VariableNode):
+                target_str = f"'{target.identifier}'"
+            else:
+                target_str = str(target)
+                
+            if isinstance(value, BinaryExpressionNode):
+                if len(value.children) >= 2:
+                    left = value.children[0]
+                    right = value.children[1]
+                    left_str = f"'{left.identifier}'" if isinstance(left, VariableNode) else str(left)
+                    right_str = str(right)
+                    value_str = f"{left_str}{value.operator}{right_str}"
+                else:
+                    value_str = str(value)
+            else:
+                value_str = str(value)
+                
+            return f"Assign({target_str} := {value_str})"
+        return "Assign(?)"
+
+@dataclass
+class BinaryExpressionNode(ASTNode):
+    """Node untuk binary expression (operator dengan 2 operand)"""
+    operator: str = ""
+    
+    def __init__(self, node_type: str, operator: str = "", **kwargs):
+        super().__init__(node_type, **kwargs)
+        self.operator = operator
+    
+    def __repr__(self):
+        if len(self.children) >= 2:
+            left = self.children[0]
+            right = self.children[1]
+            left_str = f"'{left.identifier}'" if isinstance(left, VariableNode) else str(left)
+            right_str = str(right)
+            return f"{left_str}{self.operator}{right_str}"
+        return f"BinOp '{self.operator}'"
+
+@dataclass
+class VariableNode(ASTNode):
+    """Node untuk variable reference"""
+    identifier: str = ""
+    is_array_element: bool = False
+    
+    def __init__(self, node_type: str, identifier: str = "", **kwargs):
+        super().__init__(node_type, **kwargs)
+        self.identifier = identifier
+    
+    def __repr__(self):
+        return f"Var('{self.identifier}')"
+
+@dataclass
+class NumberNode(ASTNode):
+    """Node untuk number literal"""
+    value: float = 0
+    
+    def __init__(self, node_type: str, value: float = 0, **kwargs):
+        super().__init__(node_type, **kwargs)
+        self.value = value
+    
+    def __repr__(self):
+        return f"{self.value}"
+
+@dataclass
+class StringNode(ASTNode):
+    """Node untuk string literal"""
+    value: str = ""
+    
+    def __init__(self, node_type: str, value: str = "", **kwargs):
+        super().__init__(node_type, **kwargs)
+        self.value = value
+    
+    def __repr__(self):
+        return f"String('{self.value}')"
+
+@dataclass
+class BooleanNode(ASTNode):
+    """Node untuk boolean literal"""
+    value: bool = False
+    identifier: str = ""
+    
+    def __init__(self, node_type: str, value: bool = False, identifier: str = "", **kwargs):
+        super().__init__(node_type, **kwargs)
+        self.value = value
+        self.identifier = identifier
+    
+    def __repr__(self):
+        return f"Boolean('{self.identifier}')"
+
+@dataclass
+class ProcedureCallNode(ASTNode):
+    """Node untuk procedure call"""
+    procedure_name: str = ""
+    is_user_defined: bool = False
+    
+    def __init__(self, node_type: str, procedure_name: str = "", **kwargs):
+        super().__init__(node_type, **kwargs)
+        self.procedure_name = procedure_name
+    
+    def __repr__(self):
+        return f"ProcedureCall('{self.procedure_name}')"
