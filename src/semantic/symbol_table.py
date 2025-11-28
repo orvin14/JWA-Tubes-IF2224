@@ -29,37 +29,28 @@ class SymbolTable:
     """
     
     def __init__(self):
-        # Identifier table
         self.tab: List[Optional[Dict[str, Any]]] = []
-        
-        # Block table
+
         self.btab: List[Dict[str, Any]] = []
         
-        # Array table
         self.atab: List[Dict[str, Any]] = []
         
-        # Initialize dengan reserved words (indices 0-28)
         self._init_reserved_words()
         
-        # Display stack untuk tracking blocks
         self.display: List[int] = []
         
-        # Current lexical level
+
         self.level: int = -1
         
-        # Address counter
         self.next_adr: int = 0
-        
-        # Counter untuk user identifiers mulai dari 29
+    
         self.user_id_start = 29
         self.next_user_id = 29
         
-        # Store constant values
         self.const_values: Dict[str, Any] = {}
         
     def _init_reserved_words(self):
         """Initialize reserved words dan built-in types (indices 0-28)"""
-        # Types (indices 0-4)
         reserved_types = [
             ("integer", BaseType.INTEGER),
             ("real", BaseType.REAL), 
@@ -80,7 +71,6 @@ class SymbolTable:
                 "link": 0
             })
         
-        # Keywords lainnya (indices 5-27)
         other_keywords = [
             "program", "variabel", "mulai", "selesai", "jika", "maka", "selain_itu",
             "selama", "lakukan", "untuk", "ke", "turun_ke", "larik", "dari", 
@@ -100,7 +90,6 @@ class SymbolTable:
                 "link": len(self.tab) - 1 if self.tab else 0
             })
         
-        # Built-in procedures (indices 28-31)
         built_ins = [
             ("writeln", ObjType.PROCEDURE, BaseType.VOID.value),
             ("readln", ObjType.PROCEDURE, BaseType.VOID.value),
@@ -129,10 +118,10 @@ class SymbolTable:
         block_index = len(self.btab)
         
         self.btab.append({
-            "last": 0,      # Pointer ke identifier terakhir dalam block
-            "lpar": 0,      # Pointer ke parameter terakhir
-            "psze": 0,      # Total ukuran parameter
-            "vsze": 0       # Total ukuran variabel lokal
+            "last": 0,      
+            "lpar": 0,      
+            "psze": 0,      
+            "vsze": 0       
         })
         
         self.display.append(block_index)
@@ -151,31 +140,26 @@ class SymbolTable:
         Memasukkan identifier baru ke symbol table
         Returns: index dari identifier yang baru dimasukkan
         """
-        # Gunakan next_user_id untuk user-defined identifiers
         tab_index = self.next_user_id
         self.next_user_id += 1
         
-        # Hitung address untuk variabel
         if obj_type == ObjType.VARIABLE:
             adr = self.next_adr
             self.next_adr += size
         else:
             adr = 0
 
-        # Get current block
         current_block_idx = self.display[self.level]
         current_block = self.btab[current_block_idx]
         prev_last = current_block["last"]
         
-        # Extend tab jika perlu
         if tab_index >= len(self.tab):
             while len(self.tab) <= tab_index:
                 self.tab.append(None)
         
-        # Link menunjuk ke identifier sebelumnya dalam block yang sama
+
         link_value = prev_last 
-        
-        # Insert identifier
+      
         self.tab[tab_index] = {
             "name": name,
             "obj": obj_type,
@@ -186,19 +170,13 @@ class SymbolTable:
             "adr": adr,
             "link": link_value
         }
-        
-        # Store constant value jika ada
         if obj_type == ObjType.CONSTANT and const_value is not None:
             self.const_values[name] = const_value
-        
-        # Update last pointer di block
         current_block["last"] = tab_index
         
-        # Update block size untuk variabel
         if obj_type == ObjType.VARIABLE:
             current_block["vsze"] += size
             
-        # print(f"ENTER ID: {name}, obj={obj_type}, lev={self.level}, idx={tab_index}")
         return tab_index
 
     def find_identifier(self, name: str) -> Optional[int]:
@@ -214,8 +192,7 @@ class SymbolTable:
                 if entry is None:
                     break
                 current_idx = entry["link"]
-            
-            # Cek reserved words
+        
             for i in range(self.user_id_start):
                 if i < len(self.tab) and self.tab[i] and self.tab[i]["name"] == name:
                     return i

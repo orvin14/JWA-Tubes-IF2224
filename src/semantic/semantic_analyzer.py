@@ -23,12 +23,9 @@ class SemanticAnalyzer:
         """
         self.errors.clear()
         
-        # Start dengan global scope - block 0
         global_block_idx = self.symbol_table.enter_block()
-        # Build AST dan perform semantic analysis
         self.current_ast = self.visit(parse_tree)
         
-        # Leave global scope
         self.symbol_table.leave_block()
 
             
@@ -528,49 +525,51 @@ class SemanticAnalyzer:
         return ASTNode("Statement", data_type=BaseType.VOID)
     
     def visit_assignment_statement(self, node: ParseNode) -> ASTNode:
-        """Visit assignment statement"""
+        """Visit assignment statement - FIXED VERSION"""
         target_node = None
         value_node = None
-        
-        for i, child in enumerate(node.children):
-            name = self.clean_name(child.name)
+        assign_token = None
+
+        for child in node.children:
+            clean_name = self.clean_name(child.name)
+            if  child.name.startswith("IDENTIFIER"):
+                if child.token:
+                    var_name = child.token.value
+                    var_idx = self.symbol_table.find_identifier(var_name)
+                    
+                    if var_idx is not None:
+                        var_type = BaseType(self.symbol_table.tab[var_idx]["type"])
+                        target_node = VariableNode(
+                            "Variable", 
+                            identifier=var_name,
+                            token=child.token,
+                            data_type=var_type, 
+                            tab_index=var_idx
+                        )
+                    else:
+                        self.error(f"Undefined variable '{var_name}'", child.token)
+                        target_node = VariableNode("Variable", identifier=var_name,
+                                                token=child.token, data_type=BaseType.VOID)
             
-            if name == "IDENTIFIER" and i == 0:
-                # Target Variable
-                var_name = child.token.value
-                var_idx = self.symbol_table.find_identifier(var_name)
-                
-                if var_idx is not None:
-                    var_type = BaseType(self.symbol_table.tab[var_idx]["type"])
-                    target_node = VariableNode(
-                        "Variable", 
-                        identifier=var_name,
-                        token=child.token,
-                        data_type=var_type, 
-                        tab_index=var_idx
-                    )
-                else:
-                    self.error(f"Undefined variable '{var_name}'", child.token)
-                    target_node = VariableNode(
-                        "Variable",
-                        identifier=var_name,
-                        token=child.token,
-                        data_type=BaseType.VOID
-                    )
-            elif name == "expression":
-                # Value Expression
+            elif clean_name == "variable":
+                target_node = self.visit(child)
+            
+            elif clean_name == "assign_operator":
+                assign_token = child.token
+            
+            elif clean_name == "expression":
                 value_node = self.visit(child)
         
         # Type checking
-        if target_node and value_node:
-            if target_node.data_type and value_node.data_type:
-                if not self.is_type_compatible(target_node.data_type, value_node.data_type):
-                    self.error(
-                        f"Type mismatch: cannot assign {value_node.data_type.name} "
-                        f"to {target_node.data_type.name}"
-                    )
+        if target_node and value_node and target_node.data_type and value_node.data_type:
+            if not self.is_type_compatible(target_node.data_type, value_node.data_type):
+                self.error(
+                    f"Type mismatch: cannot assign {value_node.data_type.name} "
+                    f"to {target_node.data_type.name}",
+                    assign_token
+                )
         
-        # Create assignment node
+        # Buat node assignment
         ast_node = AssignmentNode("Assignment", data_type=BaseType.VOID)
         if target_node:
             ast_node.add_child(target_node)
@@ -578,7 +577,6 @@ class SemanticAnalyzer:
             ast_node.add_child(value_node)
         
         return ast_node
-    
     # ========== Expressions ==========
     
     def visit_expression(self, node: ParseNode) -> ASTNode:
