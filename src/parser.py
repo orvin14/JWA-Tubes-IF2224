@@ -65,7 +65,7 @@ class Parser:
         return root
 
     def parse_program(self):
-        node = ParseNode("program")
+        node = ParseNode("<program>")
         node.add_child(self.parse_program_header())
         node.add_child(self.parse_declaration_part())
         node.add_child(self.parse_compound_statement())
@@ -73,31 +73,40 @@ class Parser:
         return node
 
     def parse_program_header(self):
-        node = ParseNode("program-header")
+        node = ParseNode("<program-header>")
         node.add_child(self.eat(TokenType.KEYWORD, "program"))
         node.add_child(self.eat(TokenType.IDENTIFIER))
         node.add_child(self.eat(TokenType.SEMICOLON))
         return node
 
+    def parse_var_declaration(self):
+        node = ParseNode("<var-declaration>")
+        node.add_child(self.eat(TokenType.KEYWORD, "variabel"))
+        
+        # PERUBAHAN: Gunakan parse_var_item() dalam loop
+        while (self.current_token and 
+            self.current_token.type == TokenType.IDENTIFIER):
+            node.add_child(self.parse_var_item())  # ← BARU!
+        
+        return node
+    
     def parse_declaration_part(self):
-        node = ParseNode("declaration-part")
+        node = ParseNode("<declaration-part>")
         if self.current_token and self.current_token.type == TokenType.KEYWORD and self.current_token.value == 'variabel':
             node.add_child(self.parse_var_declaration())
         return node
-
-    def parse_var_declaration(self):
-        node = ParseNode("var-declaration")
-        node.add_child(self.eat(TokenType.KEYWORD, "variabel"))
-        
-        while self.current_token and self.current_token.type == TokenType.IDENTIFIER:
-            node.add_child(self.parse_identifier_list())
-            node.add_child(self.eat(TokenType.COLON))
-            node.add_child(self.parse_type())
-            node.add_child(self.eat(TokenType.SEMICOLON))
+    
+    def parse_var_item(self):
+        """Parse satu kelompok deklarasi variabel"""
+        node = ParseNode("<var-item>")
+        node.add_child(self.parse_identifier_list())
+        node.add_child(self.eat(TokenType.COLON))
+        node.add_child(self.parse_type())
+        node.add_child(self.eat(TokenType.SEMICOLON))
         return node
-
+    
     def parse_identifier_list(self):
-        node = ParseNode("identifier-list")
+        node = ParseNode("<identifier-list>")
         node.add_child(self.eat(TokenType.IDENTIFIER))
         while self.current_token and self.current_token.type == TokenType.COMMA:
             node.add_child(self.eat(TokenType.COMMA))
@@ -105,7 +114,7 @@ class Parser:
         return node
 
     def parse_type(self):
-        node = ParseNode("type")
+        node = ParseNode("<type>")
         if self.current_token.type == TokenType.KEYWORD and self.current_token.value in ['integer', 'real', 'boolean', 'char']:
             node.add_child(self.eat(TokenType.KEYWORD, self.current_token.value))
         elif self.current_token.type == TokenType.KEYWORD and self.current_token.value == 'larik':
@@ -116,7 +125,7 @@ class Parser:
         return node
 
     def parse_array_type(self):
-        node = ParseNode("array-type")
+        node = ParseNode("<array-type>")
         node.add_child(self.eat(TokenType.KEYWORD, "larik"))
         node.add_child(self.eat(TokenType.LBRACKET))
         node.add_child(self.parse_range())
@@ -126,21 +135,21 @@ class Parser:
         return node
     
     def parse_range(self):
-        node = ParseNode("range")
+        node = ParseNode("<range>")
         node.add_child(self.parse_expression())
         node.add_child(self.eat(TokenType.RANGE_OPERATOR))
         node.add_child(self.parse_expression())
         return node
 
     def parse_compound_statement(self):
-        node = ParseNode("compound-statement")
+        node = ParseNode("<compound-statement>")
         node.add_child(self.eat(TokenType.KEYWORD, "mulai"))
         node.add_child(self.parse_statement_list())
         node.add_child(self.eat(TokenType.KEYWORD, "selesai"))
         return node
 
     def parse_statement_list(self):
-        node = ParseNode("statement-list")
+        node = ParseNode("<statement-list>")
         
         if self.current_token and self.current_token.type == TokenType.KEYWORD and self.current_token.value == 'selesai':
             return node
@@ -159,7 +168,7 @@ class Parser:
 
     def parse_statement(self):
         if not self.current_token or (self.current_token.type == TokenType.KEYWORD and self.current_token.value == 'selesai'):
-            return ParseNode("empty-statement")
+            return ParseNode("<empty-statement>")
 
         if self.current_token.type == TokenType.IDENTIFIER:
             next_token = self.peek()
@@ -180,19 +189,19 @@ class Parser:
             elif val == 'mulai':
                 return self.parse_compound_statement()
             else:
-                return ParseNode("empty-statement")
+                return ParseNode("<empty-statement>")
         else:
-            return ParseNode("empty-statement")
+            return ParseNode("<empty-statement>")
 
     def parse_assignment_statement(self):
-        node = ParseNode("assignment-statement")
+        node = ParseNode("<assignment-statement>")
         node.add_child(self.eat(TokenType.IDENTIFIER))
         node.add_child(self.eat(TokenType.ASSIGN_OPERATOR))
         node.add_child(self.parse_expression())
         return node
     
     def parse_parameter_list(self):
-        node = ParseNode("parameter-list")
+        node = ParseNode("<parameter-list>")
         node.add_child(self.parse_expression())
         while self.current_token and self.current_token.type == TokenType.COMMA:
             node.add_child(self.eat(TokenType.COMMA))
@@ -200,7 +209,7 @@ class Parser:
         return node
 
     def parse_if_statement(self):
-        node = ParseNode("if-statement")
+        node = ParseNode("<if-statement>")
         node.add_child(self.eat(TokenType.KEYWORD, "jika"))
         node.add_child(self.parse_expression())
         node.add_child(self.eat(TokenType.KEYWORD, "maka"))
@@ -211,7 +220,7 @@ class Parser:
         return node
     
     def parse_while_statement(self):
-        node = ParseNode("while-statement")
+        node = ParseNode("<while-statement>")
         node.add_child(self.eat(TokenType.KEYWORD, "selama"))
         node.add_child(self.parse_expression())
         node.add_child(self.eat(TokenType.KEYWORD, "lakukan"))
@@ -219,7 +228,7 @@ class Parser:
         return node
         
     def parse_for_statement(self):
-        node = ParseNode("for-statement")
+        node = ParseNode("<for-statement>")
         node.add_child(self.eat(TokenType.KEYWORD, "untuk"))
         node.add_child(self.eat(TokenType.IDENTIFIER))
         node.add_child(self.eat(TokenType.ASSIGN_OPERATOR))
@@ -238,7 +247,7 @@ class Parser:
         return node
 
     def parse_expression(self):
-        node = ParseNode("expression")
+        node = ParseNode("<expression>")
         node.add_child(self.parse_simple_expression())
         if self.current_token and self.current_token.type == TokenType.RELATIONAL_OPERATOR:
             rel_op_node = self.eat(TokenType.RELATIONAL_OPERATOR)
@@ -247,7 +256,7 @@ class Parser:
         return node
 
     def parse_simple_expression(self):
-        node = ParseNode("simple-expression")
+        node = ParseNode("<simple-expression>")
         
         if self.current_token and self.current_token.type == TokenType.ARITHMETIC_OPERATOR and self.current_token.value in ['+', '-']:
             node.add_child(self.eat(TokenType.ARITHMETIC_OPERATOR, self.current_token.value))
@@ -265,7 +274,7 @@ class Parser:
         return node
 
     def parse_term(self):
-        node = ParseNode("term")
+        node = ParseNode("<term>")
         node.add_child(self.parse_factor())
         
         while (self.current_token and
@@ -283,7 +292,7 @@ class Parser:
         return node
 
     def parse_factor(self):
-        node = ParseNode("factor")
+        node = ParseNode("<factor>")
         
         if not self.current_token:
             raise SyntaxError("Syntax Error: Unexpected EOF, expected a factor")

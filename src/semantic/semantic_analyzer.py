@@ -25,13 +25,13 @@ class SemanticAnalyzer:
         
         # Start dengan global scope - block 0
         global_block_idx = self.symbol_table.enter_block()
-        
         # Build AST dan perform semantic analysis
         self.current_ast = self.visit(parse_tree)
         
         # Leave global scope
         self.symbol_table.leave_block()
-        
+
+            
         return self.current_ast
 
     def error(self, message: str, token: Token = None):
@@ -61,8 +61,12 @@ class SemanticAnalyzer:
         try:
             return method(node)
         except Exception as e:
-            # Fallback mechanism agar tidak crash total jika struktur tree aneh
-            # print(f"DEBUG: Error in {method_name}: {e}") # Uncomment untuk debug
+    # JANGAN DIAM! KASIH TAHU!
+            print(f"\nBUG DI METHOD: {method_name}")
+            print(f"Node name: {node.name}")
+            print(f"Error: {e}")
+            import traceback
+            traceback.print_exc()  # ini paling penting!
             ast_node = ASTNode(node.name)
             for child in node.children:
                 try:
@@ -82,61 +86,38 @@ class SemanticAnalyzer:
         return ast_node
     
     # ========== Program ==========
-    
+        
     def visit_program(self, node: ParseNode) -> ASTNode:
-        """Visit program node"""
+        """Visit program - FIXED VERSION"""
         program_name = "Unknown"
-        header_node = None
-        token_ref = None
-
-        # Cari program-header secara fleksibel (dengan atau tanpa bracket)
-        for child in node.children:
-            if "program-header" in self.clean_name(child.name):
-                header_node = child
-                break
+        if node.children and node.children[0].name == "<program-header>":
+            header_children = node.children[0].children
+            if len(header_children) > 1 and header_children[1].token:
+                program_name = header_children[1].token.value
         
-        if header_node:
-            # Struktur: KEYWORD('program') -> IDENTIFIER -> SEMICOLON
-            # Kita cari child yang merupakan IDENTIFIER
-            for h_child in header_node.children:
-                if h_child.name == "IDENTIFIER" and h_child.token:
-                    program_name = h_child.token.value
-                    token_ref = h_child.token
-                    break
-        
-        # Enter program ke symbol table
         program_idx = self.symbol_table.enter_identifier(
             program_name, ObjType.PROGRAM, BaseType.VOID.value
         )
         
-        # Create program node
-        ast_node = ProgramNode(
-            "Program", 
-            name=program_name,
-            token=token_ref,
-            data_type=BaseType.VOID, 
-            tab_index=program_idx
-        )
+        ast_node = ProgramNode("Program", name=program_name, 
+                            token=node.children[0].children[1].token if node.children else None,
+                            data_type=BaseType.VOID, tab_index=program_idx)
         
-        # Process children (Declarations & Compound Statement)
         for child in node.children:
-            name = self.clean_name(child.name)
-            
-            if name == "declaration-part":
+            if child.name == "<declaration-part>":
                 decl_ast = self.visit(child)
                 ast_node.add_child(decl_ast)
-            elif name == "compound-statement":
-                # Enter main block
+            elif child.name == "<compound-statement>":
+                # Enter block SEBELUM compound statement
                 main_block_idx = self.symbol_table.enter_block()
                 compound_ast = self.visit(child)
                 compound_ast.block_index = main_block_idx
                 ast_node.add_child(compound_ast)
-                self.symbol_table.leave_block()
+                # Leave block SETELAH compound statement selesai
+                self.symbol_table.leave_block()  # ← PINDAHKAN KE SINI!
         
         return ast_node
-    
-    # ========== Declarations ==========
-    
+
     def visit_declaration_part(self, node: ParseNode) -> ASTNode:
         """Visit declaration part - support const, type, var, subprograms"""
         ast_node = ASTNode("Declarations")
@@ -167,59 +148,178 @@ class SemanticAnalyzer:
                     ast_node.add_child(subprogram_ast)
         
         return ast_node
+    def visit_block(self, node: ParseNode) -> ASTNode:
+        """Visit block - handle declarations dan compound statement"""
+        ast_node = ASTNode("Block", block_index=self.symbol_table.display[-1])
+        
+        for child in node.children:
+            if child.name == "<declaration-part>":
+                decl_ast = self.visit(child)
+                ast_node.add_child(decl_ast)
+            elif child.name == "<compound-statement>":
+                compound_ast = self.visit(child)
+                ast_node.add_child(compound_ast)
+        
+        return ast_node
+    def visit_variable(self, node: ParseNode) -> ASTNode:
+        """Visit variable (including array access)"""
+        # Check for array access pattern: IDENTIFIER LBRACKET expression RBRACKET
+        if (len(node.children) >= 4 and
+            node.children[0].name == "IDENTIFIER" and
+            node.children[1].name == "LBRACKET"):
+            
+            array_name = node.children[0].token.value
+            array_idx = self.symbol_table.find_identifier(array_name)
+            
+            # Find RBRACKET position
+            rbrace_idx = -1
+            for i in range(2, len(node.children)):
+                if node.children[i].name == "RBRACKET":
+                    rbrace_idx = i
+                    break
+            
+            if rbrace_idx > 2 and array_idx is not None:
+                array_entry = self.symbol_table.tab[array_idx]
+                
+                if array_entry["type"] == BaseType.ARRAY.value:
+                    # Get element type from atab
+                    array_ref = array_entry["ref"]
+                    if array_ref < len(self.symbol_table.atab):
+                        element_type = BaseType(self.symbol_table.atab[array_ref]["element_type"])
+                        
+                        # Parse index expressions
+                        index_expressions = []
+                        for i in range(2, rbrace_idx):
+                            name = self.clean_name(node.children[i].name)
+                            if name == "expression":
+                                index_expr = self.visit(node.children[i])
+                                index_expressions.append(index_expr)
+                                
+                                # Check bounds if constant
+                                if hasattr(index_expr, 'value'):
+                                    array_info = self.symbol_table.atab[array_ref]
+                                    idx_val = int(index_expr.value)
+                                    if idx_val < array_info["low"] or idx_val > array_info["high"]:
+                                        self.error(
+                                            f"Array index {idx_val} out of bounds "
+                                            f"[{array_info['low']}..{array_info['high']}]"
+                                        )
+                        
+                        var_node = VariableNode("ArrayElement", identifier=array_name,
+                                            token=node.children[0].token,
+                                            data_type=element_type, tab_index=array_idx)
+                        var_node.is_array_element = True
+                        var_node.index_expressions = index_expressions
+                        return var_node
+        
+        # Simple variable (non-array)
+        for child in node.children:
+            if child.name == "IDENTIFIER" and child.token:
+                var_name = child.token.value
+                var_idx = self.symbol_table.find_identifier(var_name)
+                
+                if var_idx is not None:
+                    var_type = BaseType(self.symbol_table.tab[var_idx]["type"])
+                    return VariableNode("Variable", identifier=var_name,
+                                    token=child.token, data_type=var_type, 
+                                    tab_index=var_idx)
+                else:
+                    self.error(f"Undefined variable '{var_name}'", child.token)
+                    return VariableNode("Variable", identifier=var_name,
+                                    token=child.token, data_type=BaseType.VOID)
+        
+        return ASTNode("Variable", data_type=BaseType.VOID)
+
     
     def visit_var_declaration(self, node: ParseNode) -> ASTNode:
-        """Visit variable declaration"""
+        """Visit var declaration - FIXED"""
         ast_node = ASTNode("VarDeclaration")
         
         for child in node.children:
-            name = self.clean_name(child.name)
-            if name == "var-item":
+            # Skip keyword 'variabel'
+            if child.name == "KEYWORD":
+                continue
+                
+            if child.name == "<var-item>":
                 var_item_ast = self.visit(child)
+                
+                # ← TAMBAHKAN NULL CHECK INI!
+                if var_item_ast is None:
+                    continue
+                    
+                # Extract VarDecl nodes
                 for var_decl in var_item_ast.children:
-                    ast_node.add_child(var_decl)
+                    if isinstance(var_decl, VarDeclNode):
+                        var_decl.block_index = 0
+                        ast_node.add_child(var_decl)
         
         return ast_node
-    
+
     def visit_var_item(self, node: ParseNode) -> ASTNode:
-        """Visit var item (identifier list + type)"""
+        """Visit var item - FIXED VERSION with proper name matching"""
         identifiers = []
+        type_node = None
         type_ast = None
+        token_ref = None
         
-        # Extract identifiers dan type
         for child in node.children:
-            name = self.clean_name(child.name)
-            if name == "identifier-list":
+            # PERBAIKAN: Cek dengan child.name langsung (sudah include <>)
+            if child.name == "<identifier-list>":  # ← INI BENAR!
                 identifiers = self.extract_identifiers(child)
-            elif name == "type":
+                # Get token untuk error reporting
+                for id_child in child.children:
+                    if id_child.token and id_child.token.type == TokenType.IDENTIFIER:
+                        token_ref = id_child.token
+                        break
+            
+            elif child.name == "<type>":  # ← INI JUGA BENAR!
+                type_node = child
                 type_ast = self.visit(child)
         
-        var_ast = ASTNode("VarItem")
+        # NULL CHECK: Pastikan ada identifiers dan type
+        if not identifiers or type_ast is None:
+            print(f"WARNING: var_item incomplete - identifiers={identifiers}, type_ast={type_ast}")
+            return ASTNode("VarItem")  # Return empty node, bukan None!
         
-        if identifiers and type_ast:
-            base_type = type_ast.data_type
+        # Buat container node
+        var_item_node = ASTNode("VarItem")
+        
+        # Process semua identifiers
+        base_type = type_ast.data_type
+        array_ref = getattr(type_ast, 'array_ref', None)  # Get array ref jika ada
+        
+        for identifier in identifiers:
+            # Check duplicate
+            existing_idx = self.symbol_table.find_identifier(identifier)
+            if existing_idx is not None:
+                existing_entry = self.symbol_table.tab[existing_idx]
+                if existing_entry["lev"] == self.symbol_table.level:
+                    self.error(f"Duplicate identifier '{identifier}'", token_ref)
+                    continue
             
-            # Masukkan setiap identifier ke symbol table
-            for identifier in identifiers:
-                # Check duplicate
-                if not self.check_duplicate_identifier(identifier):
-                    var_idx = self.symbol_table.enter_identifier(
-                        identifier, ObjType.VARIABLE, base_type.value, size=1
-                    )
-                    
-                    # Create VarDeclNode
-                    ident_ast = VarDeclNode(
-                        "Variable", 
-                        identifier=identifier,
-                        token=Token(TokenType.IDENTIFIER, identifier, 0, 0),
-                        data_type=base_type, 
-                        tab_index=var_idx, 
-                        block_index=0
-                    )
-                    var_ast.add_child(ident_ast)
+            # Register ke symbol table
+            if base_type == BaseType.ARRAY and array_ref is not None:
+                # PENTING: Untuk array, simpan ref ke atab!
+                var_idx = self.symbol_table.enter_identifier(
+                    identifier, ObjType.VARIABLE, base_type.value, ref=array_ref
+                )
+            else:
+                var_idx = self.symbol_table.enter_identifier(
+                    identifier, ObjType.VARIABLE, base_type.value, size=1
+                )
+            
+            # Buat VarDecl node
+            var_decl = VarDeclNode(
+                "Variable",
+                identifier=identifier,
+                token=token_ref,
+                data_type=base_type,
+                tab_index=var_idx,
+                block_index=self.symbol_table.level
+            )
+            var_item_node.add_child(var_decl)
         
-        return var_ast
-    
+        return var_item_node
     def visit_type(self, node: ParseNode) -> ASTNode:
         """Visit type specification"""
         if not node.children:
@@ -247,34 +347,148 @@ class SemanticAnalyzer:
         
         return ASTNode("Type", data_type=BaseType.VOID)
     
+
     def visit_array_type(self, node: ParseNode) -> ASTNode:
-        """Visit array type"""
+        """Visit array type - FIXED to save array_ref"""
+        index_spec = None
         element_type_node = None
         low_bound = 1
         high_bound = 10
         
         for child in node.children:
-            name = self.clean_name(child.name)
-            
-            if name in ["range", "index-specification"]:
+            if child.name == "<index-specification>":
+                index_spec = child
+                # Parse range
+                range_result = self.parse_range(index_spec)
+                if range_result:
+                    low_bound, high_bound = range_result
+            elif child.name == "<range>":  # Bisa langsung <range> juga
                 range_result = self.parse_range(child)
                 if range_result:
                     low_bound, high_bound = range_result
-            elif name == "type":
+            elif child.name == "<type>":
                 element_type_node = self.visit(child)
         
         if element_type_node:
-            # Create array table entry
+            # Cek invalid bounds
+            if low_bound > high_bound:
+                self.error(f"Invalid array bounds: {low_bound}..{high_bound}", 
+                        node.children[0].token if node.children else None)
+            
+            # Buat array table entry
             array_idx = self.symbol_table.enter_array(
-                BaseType.INTEGER.value,
-                element_type_node.data_type.value,
+                BaseType.INTEGER.value,  # index type
+                element_type_node.data_type.value,  # element type
                 low_bound,
                 high_bound,
-                1
+                1  # element size
             )
-            return ASTNode("ArrayType", data_type=BaseType.ARRAY, tab_index=array_idx)
+            
+            # KUNCI: Simpan array_ref di node!
+            array_node = ASTNode("ArrayType", data_type=BaseType.ARRAY, tab_index=array_idx)
+            array_node.array_ref = array_idx  # ← INI PENTING!
+            return array_node
         
         return ASTNode("ArrayType", data_type=BaseType.ARRAY)
+    def visit_const_declaration(self, node: ParseNode) -> ASTNode:
+        """Visit constant declaration"""
+        ast_node = ASTNode("ConstDeclaration")
+        
+        for child in node.children:
+            name = self.clean_name(child.name)
+            if name == "const-item":
+                const_item_ast = self.visit(child)
+                if const_item_ast:
+                    ast_node.add_child(const_item_ast)
+        
+        return ast_node
+
+    def visit_const_item(self, node: ParseNode) -> ASTNode:
+        """Visit const item - FIXED VERSION"""
+        identifier = None
+        value_node = None
+        const_value = None
+        
+        for child in node.children:
+            if child.name == "IDENTIFIER" and child.token:
+                identifier = child.token.value
+            elif child.name == "<const-value>":
+                value_node = self.visit(child)
+                if hasattr(value_node, 'value'):
+                    const_value = value_node.value
+                elif value_node.children and hasattr(value_node.children[0], 'value'):
+                    const_value = value_node.children[0].value
+                
+                # PERBAIKAN: Handle identifier constants (seperti MIN = MAX)
+                if isinstance(const_value, str):
+                    # Ini mungkin identifier constant
+                    ref_idx = self.symbol_table.find_identifier(const_value)
+                    if ref_idx is not None:
+                        ref_entry = self.symbol_table.tab[ref_idx]
+                        if ref_entry["obj"] == ObjType.CONSTANT:
+                            const_value = self.symbol_table.get_constant_value(const_value)
+        
+        if identifier and value_node:
+            if self.check_duplicate_identifier(identifier, node.children[0].token if node.children else None):
+                const_node = ASTNode("ConstItem", 
+                                token=node.children[0].token if node.children else None,
+                                data_type=value_node.data_type, tab_index=-1)
+                const_node.add_child(value_node)
+                return const_node
+            
+            const_type = value_node.data_type
+            
+            const_idx = self.symbol_table.enter_identifier(
+                identifier, ObjType.CONSTANT, const_type.value, const_value=const_value
+            )
+            
+            const_node = ASTNode("ConstItem", 
+                            token=node.children[0].token if node.children else None,
+                            data_type=const_type, tab_index=const_idx)
+            const_node.identifier = identifier  # ← Tambahkan ini
+            const_node.add_child(value_node)
+            return const_node
+        
+        return ASTNode("ConstItem")
+    def visit_const_value(self, node: ParseNode) -> ASTNode:
+        """Visit constant value"""
+        if node.children:
+            child = node.children[0]
+            
+            if child.token:
+                token_type = child.token.type
+                token_value = child.token.value
+                
+                # Number
+                if token_type == TokenType.NUMBER:
+                    if '.' in token_value:
+                        data_type = BaseType.REAL
+                        value = float(token_value)
+                    else:
+                        data_type = BaseType.INTEGER
+                        value = int(token_value)
+                    
+                    ast_node = ASTNode("ConstValue", token=child.token, 
+                                    data_type=data_type)
+                    ast_node.value = value
+                    return ast_node
+                
+                # String/Char
+                elif token_type == TokenType.STRING_LITERAL:
+                    # Detect char literal (length 3, single quotes)
+                    if len(token_value) == 3 and token_value[0] == "'" and token_value[-1] == "'":
+                        data_type = BaseType.CHAR
+                        value = token_value[1]
+                    else:
+                        data_type = BaseType.STRING
+                        value = token_value
+                    
+                    ast_node = ASTNode("ConstValue", token=child.token, 
+                                    data_type=data_type)
+                    ast_node.value = value
+                    return ast_node
+        
+        return ASTNode("ConstValue", data_type=BaseType.VOID)
     
     # ========== Statements ==========
     
@@ -551,13 +765,37 @@ class SemanticAnalyzer:
         return ast_node
 
     # ========== Helper Methods ==========
-    
     def extract_identifiers(self, node: ParseNode) -> List[str]:
+        """Extract identifiers dari identifier-list node - FIXED"""
         identifiers = []
+        
+        # Debug: Print apa yang kita terima
+        # print(f"DEBUG extract_identifiers: node.name={node.name}, children count={len(node.children)}")
+        
         for child in node.children:
-            if child.name == "IDENTIFIER" and child.token:
+            # Debug setiap child
+            # print(f"  child.name={child.name}, has_token={child.token is not None}")
+            
+            # METHOD 1: Cek jika child punya token dengan type IDENTIFIER
+            if child.token and child.token.type == TokenType.IDENTIFIER:
                 identifiers.append(child.token.value)
-        return identifiers
+                # print(f"    -> Found identifier: {child.token.value}")
+            
+            # METHOD 2: Cek jika name dimulai dengan "IDENTIFIER"
+            # (untuk handle kasus parser yang bikin name jadi "IDENTIFIER('value')")
+            elif child.name.startswith("IDENTIFIER") and child.token:
+                identifiers.append(child.token.value)
+                # print(f"    -> Found identifier via name: {child.token.value}")
+            
+            # METHOD 3: Cek exact match (original method dari kode teman)
+            elif child.name == "IDENTIFIER" and child.token:
+                identifiers.append(child.token.value)
+                # print(f"    -> Found identifier exact match: {child.token.value}")
+        
+        # Debug: Print hasil
+        # print(f"  RESULT: identifiers={identifiers}")
+        return identifiers        
+
     
     def get_operator_value(self, node: ParseNode) -> str:
         """Safely extract operator value from a node"""
@@ -613,11 +851,6 @@ class SemanticAnalyzer:
                 target_node = child
                 break
         
-        # Sekarang extract dari range
-        # Structure: expression .. expression
-        # Karena expression complex, kita pakai helper recursive
-        
-        # Kita kumpulkan semua angka yang ada di subtree ini
         values = []
         self._collect_numbers(target_node, values)
         
@@ -643,3 +876,272 @@ class SemanticAnalyzer:
         if vals:
             return vals[0]
         return None
+    def visit_if_statement(self, node: ParseNode) -> ASTNode:
+        """Visit if-then-else statement"""
+        condition_node = None
+        then_node = None
+        else_node = None
+        
+        for child in node.children:
+            name = self.clean_name(child.name)
+            if name == "expression":
+                condition_node = self.visit(child)
+            elif name == "statement" or name == "compound-statement":
+                if then_node is None:
+                    then_node = self.visit(child)
+                else:
+                    else_node = self.visit(child)
+        
+        # Type check: condition harus boolean
+        if condition_node and condition_node.data_type != BaseType.BOOLEAN:
+            self.error(f"If condition must be boolean, got {condition_node.data_type.name}")
+        
+        ast_node = ASTNode("IfStatement", data_type=BaseType.VOID)
+        if condition_node:
+            ast_node.add_child(condition_node)
+        if then_node:
+            ast_node.add_child(then_node)
+        if else_node:
+            ast_node.add_child(else_node)
+        
+        return ast_node
+
+    def visit_while_statement(self, node: ParseNode) -> ASTNode:
+        """Visit while-do statement"""
+        condition_node = None
+        body_node = None
+        
+        for child in node.children:
+            name = self.clean_name(child.name)
+            if name == "expression":
+                condition_node = self.visit(child)
+            elif name == "statement" or name == "compound-statement":
+                body_node = self.visit(child)
+        
+        # Type check: condition harus boolean
+        if condition_node and condition_node.data_type != BaseType.BOOLEAN:
+            self.error(f"While condition must be boolean, got {condition_node.data_type.name}")
+        
+        ast_node = ASTNode("WhileStatement", data_type=BaseType.VOID)
+        if condition_node:
+            ast_node.add_child(condition_node)
+        if body_node:
+            ast_node.add_child(body_node)
+        
+        return ast_node
+
+    def visit_for_statement(self, node: ParseNode) -> ASTNode:
+        """Visit for-to/downto-do statement"""
+        control_var = None
+        start_expr = None
+        end_expr = None
+        body_node = None
+        is_downto = False
+        
+        for i, child in enumerate(node.children):
+            name = self.clean_name(child.name)
+            
+            if name == "IDENTIFIER" and control_var is None:
+                var_name = child.token.value
+                var_idx = self.symbol_table.find_identifier(var_name)
+                if var_idx is not None:
+                    var_type = BaseType(self.symbol_table.tab[var_idx]["type"])
+                    control_var = VariableNode("Variable", identifier=var_name,
+                                            token=child.token, data_type=var_type, 
+                                            tab_index=var_idx)
+                else:
+                    self.error(f"Undefined variable '{var_name}'", child.token)
+            
+            elif name == "expression":
+                if start_expr is None:
+                    start_expr = self.visit(child)
+                else:
+                    end_expr = self.visit(child)
+            
+            elif child.token and child.token.value.lower() == "turunke":
+                is_downto = True
+            
+            elif name in ["statement", "compound-statement"]:
+                body_node = self.visit(child)
+        
+        # Type checking: control var harus integer/ordinal
+        if control_var and control_var.data_type not in [BaseType.INTEGER, BaseType.CHAR]:
+            self.error(f"For loop control variable must be integer or char")
+        
+        ast_node = ASTNode("ForStatement", data_type=BaseType.VOID)
+        ast_node.is_downto = is_downto
+        
+        if control_var:
+            ast_node.add_child(control_var)
+        if start_expr:
+            ast_node.add_child(start_expr)
+        if end_expr:
+            ast_node.add_child(end_expr)
+        if body_node:
+            ast_node.add_child(body_node)
+        
+        return ast_node
+
+    def visit_repeat_statement(self, node: ParseNode) -> ASTNode:
+        """Visit repeat-until statement"""
+        body_nodes = []
+        condition_node = None
+        
+        for child in node.children:
+            name = self.clean_name(child.name)
+            
+            if name == "statement-list":
+                stmt_list = self.visit(child)
+                body_nodes = stmt_list.children
+            elif name == "expression":
+                condition_node = self.visit(child)
+        
+        # Type check: condition harus boolean
+        if condition_node and condition_node.data_type != BaseType.BOOLEAN:
+            self.error(f"Repeat-until condition must be boolean")
+        
+        ast_node = ASTNode("RepeatStatement", data_type=BaseType.VOID)
+        for stmt in body_nodes:
+            ast_node.add_child(stmt)
+        if condition_node:
+            ast_node.add_child(condition_node)
+        
+        return ast_node
+    def visit_subprogram_declaration(self, node: ParseNode) -> ASTNode:
+        """Visit subprogram declaration wrapper"""
+        if node.children:
+            return self.visit(node.children[0])
+        return ASTNode("SubprogramDeclaration")
+
+    def visit_procedure_declaration(self, node: ParseNode) -> ASTNode:
+        """Visit procedure declaration"""
+        proc_name = ""
+        
+        for child in node.children:
+            if child.name == "IDENTIFIER" and child.token:
+                proc_name = child.token.value
+                break
+        
+        if not proc_name:
+            return ASTNode("ProcedureDeclaration")
+        
+        # Check duplicate
+        if self.check_duplicate_identifier(proc_name):
+            return ASTNode("ProcedureDeclaration")
+        
+        # Enter procedure ke symbol table
+        proc_idx = self.symbol_table.enter_identifier(
+            proc_name, ObjType.PROCEDURE, BaseType.VOID.value
+        )
+        
+        proc_node = ASTNode("ProcedureDeclaration", data_type=BaseType.VOID, 
+                        tab_index=proc_idx)
+        proc_node.procedure_name = proc_name
+        
+        # Enter procedure block
+        proc_block_idx = self.symbol_table.enter_block()
+        
+        # Store block index
+        if proc_idx < len(self.symbol_table.tab):
+            self.symbol_table.tab[proc_idx]["block_index"] = proc_block_idx
+        
+        # Process parameters
+        for child in node.children:
+            name = self.clean_name(child.name)
+            if name == "formal-parameter-list":
+                param_ast = self.visit(child)
+                proc_node.add_child(param_ast)
+        
+        # Process body (block)
+        for child in node.children:
+            name = self.clean_name(child.name)
+            if name == "block":
+                block_ast = self.visit(child)
+                block_ast.block_index = proc_block_idx
+                proc_node.add_child(block_ast)
+        
+        self.symbol_table.leave_block()
+        
+        return proc_node
+
+    def visit_function_declaration(self, node: ParseNode) -> ASTNode:
+        """Visit function declaration"""
+        func_name = ""
+        return_type = BaseType.VOID
+        
+        for child in node.children:
+            name = self.clean_name(child.name)
+            
+            if child.name == "IDENTIFIER" and child.token:
+                func_name = child.token.value
+            elif name == "type":
+                type_ast = self.visit(child)
+                return_type = type_ast.data_type if type_ast.data_type else BaseType.VOID
+        
+        if not func_name:
+            return ASTNode("FunctionDeclaration")
+        
+        if self.check_duplicate_identifier(func_name):
+            return ASTNode("FunctionDeclaration")
+        
+        func_idx = self.symbol_table.enter_identifier(
+            func_name, ObjType.FUNCTION, return_type.value
+        )
+        
+        func_node = ASTNode("FunctionDeclaration", data_type=return_type, 
+                        tab_index=func_idx)
+        func_node.function_name = func_name
+        
+        func_block_idx = self.symbol_table.enter_block()
+        
+        if func_idx < len(self.symbol_table.tab):
+            self.symbol_table.tab[func_idx]["block_index"] = func_block_idx
+        
+        # Process parameters and body
+        for child in node.children:
+            name = self.clean_name(child.name)
+            if name == "formal-parameter-list":
+                param_ast = self.visit(child)
+                func_node.add_child(param_ast)
+            elif name == "block":
+                block_ast = self.visit(child)
+                block_ast.block_index = func_block_idx
+                func_node.add_child(block_ast)
+        
+        self.symbol_table.leave_block()
+        
+        return func_node
+
+    def visit_function_call(self, node: ParseNode) -> ASTNode:
+        """Visit function call"""
+        func_name = ""
+        
+        for child in node.children:
+            if child.name == "IDENTIFIER" and child.token:
+                func_name = child.token.value
+                break
+        
+        if not func_name:
+            return ASTNode("FunctionCall", data_type=BaseType.VOID)
+        
+        func_idx = self.symbol_table.find_identifier(func_name)
+        return_type = BaseType.VOID
+        
+        if func_idx is not None:
+            func_entry = self.symbol_table.tab[func_idx]
+            if func_entry["obj"] == ObjType.FUNCTION:
+                return_type = BaseType(func_entry["type"])
+        
+        ast_node = ASTNode("FunctionCall", data_type=return_type, 
+                        tab_index=func_idx)
+        ast_node.function_name = func_name
+        
+        # Process parameters
+        for child in node.children:
+            name = self.clean_name(child.name)
+            if name == "parameter-list":
+                param_ast = self.visit(child)
+                for param_expr in param_ast.children:
+                    ast_node.add_child(param_expr)
+        
+        return ast_node

@@ -173,7 +173,7 @@ class SymbolTable:
                 self.tab.append(None)
         
         # Link menunjuk ke identifier sebelumnya dalam block yang sama
-        link_value = prev_last if prev_last >= self.user_id_start else 0
+        link_value = prev_last 
         
         # Insert identifier
         self.tab[tab_index] = {
@@ -198,40 +198,29 @@ class SymbolTable:
         if obj_type == ObjType.VARIABLE:
             current_block["vsze"] += size
             
+        # print(f"ENTER ID: {name}, obj={obj_type}, lev={self.level}, idx={tab_index}")
         return tab_index
 
     def find_identifier(self, name: str) -> Optional[int]:
-        """
-        Mencari identifier dalam symbol table
-        Search dari current level ke global level
-        Returns: index jika ditemukan, None jika tidak
-        """
-        # Search from current level down to global level
         for level in range(self.level, -1, -1):
             block_index = self.display[level]
             last_idx = self.btab[block_index]["last"]
             
-            # Traverse linked list dalam block
             current_idx = last_idx
             while current_idx >= self.user_id_start:
-                if (current_idx < len(self.tab) and 
-                    self.tab[current_idx] is not None and 
-                    self.tab[current_idx]["name"] == name):
+                entry = self.tab[current_idx]
+                if entry is not None and entry["name"] == name:
                     return current_idx
-                    
-                # Follow link
-                if current_idx < len(self.tab) and self.tab[current_idx]:
-                    current_idx = self.tab[current_idx]["link"]
-                else:
+                if entry is None:
                     break
-        
-        # Cek reserved words (indices 0-28)
-        for i in range(min(self.user_id_start, len(self.tab))):
-            if self.tab[i] and self.tab[i]["name"] == name:
-                return i
-                    
+                current_idx = entry["link"]
+            
+            # Cek reserved words
+            for i in range(self.user_id_start):
+                if i < len(self.tab) and self.tab[i] and self.tab[i]["name"] == name:
+                    return i
+                        
         return None
-    
     def get_constant_value(self, name: str) -> Optional[Any]:
         """Mengambil nilai konstanta"""
         return self.const_values.get(name)
