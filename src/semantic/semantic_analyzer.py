@@ -48,22 +48,19 @@ class SemanticAnalyzer:
         Visitor pattern - dispatch ke method yang sesuai.
         Otomatis menormalisasi nama node (contoh: <program-header> -> visit_program_header)
         """
-        # Bersihkan nama node agar cocok dengan method
         clean_node_name = self.clean_name(node.name).replace("-", "_")
         method_name = f'visit_{clean_node_name}'
-        
-        # Cari method yang sesuai, jika tidak ada pakai visit_default
+
         method = getattr(self, method_name, self.visit_default)
         
         try:
             return method(node)
         except Exception as e:
-    # JANGAN DIAM! KASIH TAHU!
-            print(f"\nBUG DI METHOD: {method_name}")
-            print(f"Node name: {node.name}")
-            print(f"Error: {e}")
-            import traceback
-            traceback.print_exc()  # ini paling penting!
+    #         print(f"\nBUG DI METHOD: {method_name}")
+    #         print(f"Node name: {node.name}")
+    #         print(f"Error: {e}")
+    #         import traceback
+    #         traceback.print_exc()  
             ast_node = ASTNode(node.name)
             for child in node.children:
                 try:
@@ -82,7 +79,6 @@ class SemanticAnalyzer:
                 ast_node.add_child(res)
         return ast_node
     
-    # ========== Program ==========
         
     def visit_program(self, node: ParseNode) -> ASTNode:
         """Visit program - FIXED VERSION"""
@@ -105,13 +101,11 @@ class SemanticAnalyzer:
                 decl_ast = self.visit(child)
                 ast_node.add_child(decl_ast)
             elif child.name == "<compound-statement>":
-                # Enter block SEBELUM compound statement
                 main_block_idx = self.symbol_table.enter_block()
                 compound_ast = self.visit(child)
                 compound_ast.block_index = main_block_idx
                 ast_node.add_child(compound_ast)
-                # Leave block SETELAH compound statement selesai
-                self.symbol_table.leave_block()  # ← PINDAHKAN KE SINI!
+                self.symbol_table.leave_block()  
         
         return ast_node
 
@@ -160,7 +154,6 @@ class SemanticAnalyzer:
         return ast_node
     def visit_variable(self, node: ParseNode) -> ASTNode:
         """Visit variable (including array access)"""
-        # Check for array access pattern: IDENTIFIER LBRACKET expression RBRACKET
         if (len(node.children) >= 4 and
             node.children[0].name == "IDENTIFIER" and
             node.children[1].name == "LBRACKET"):
@@ -168,7 +161,6 @@ class SemanticAnalyzer:
             array_name = node.children[0].token.value
             array_idx = self.symbol_table.find_identifier(array_name)
             
-            # Find RBRACKET position
             rbrace_idx = -1
             for i in range(2, len(node.children)):
                 if node.children[i].name == "RBRACKET":
@@ -179,20 +171,16 @@ class SemanticAnalyzer:
                 array_entry = self.symbol_table.tab[array_idx]
                 
                 if array_entry["type"] == BaseType.ARRAY.value:
-                    # Get element type from atab
                     array_ref = array_entry["ref"]
                     if array_ref < len(self.symbol_table.atab):
                         element_type = BaseType(self.symbol_table.atab[array_ref]["element_type"])
                         
-                        # Parse index expressions
                         index_expressions = []
                         for i in range(2, rbrace_idx):
                             name = self.clean_name(node.children[i].name)
                             if name == "expression":
                                 index_expr = self.visit(node.children[i])
                                 index_expressions.append(index_expr)
-                                
-                                # Check bounds if constant
                                 if hasattr(index_expr, 'value'):
                                     array_info = self.symbol_table.atab[array_ref]
                                     idx_val = int(index_expr.value)
@@ -209,7 +197,6 @@ class SemanticAnalyzer:
                         var_node.index_expressions = index_expressions
                         return var_node
         
-        # Simple variable (non-array)
         for child in node.children:
             if child.name == "IDENTIFIER" and child.token:
                 var_name = child.token.value
@@ -260,33 +247,27 @@ class SemanticAnalyzer:
         token_ref = None
         
         for child in node.children:
-            # PERBAIKAN: Cek dengan child.name langsung (sudah include <>)
-            if child.name == "<identifier-list>":  # ← INI BENAR!
+            if child.name == "<identifier-list>":  
                 identifiers = self.extract_identifiers(child)
-                # Get token untuk error reporting
                 for id_child in child.children:
                     if id_child.token and id_child.token.type == TokenType.IDENTIFIER:
                         token_ref = id_child.token
                         break
             
-            elif child.name == "<type>":  # ← INI JUGA BENAR!
+            elif child.name == "<type>":  
                 type_node = child
                 type_ast = self.visit(child)
         
-        # NULL CHECK: Pastikan ada identifiers dan type
         if not identifiers or type_ast is None:
             print(f"WARNING: var_item incomplete - identifiers={identifiers}, type_ast={type_ast}")
-            return ASTNode("VarItem")  # Return empty node, bukan None!
+            return ASTNode("VarItem")  
         
-        # Buat container node
         var_item_node = ASTNode("VarItem")
-        
-        # Process semua identifiers
+
         base_type = type_ast.data_type
-        array_ref = getattr(type_ast, 'array_ref', None)  # Get array ref jika ada
+        array_ref = getattr(type_ast, 'array_ref', None)
         
         for identifier in identifiers:
-            # Check duplicate
             existing_idx = self.symbol_table.find_identifier(identifier)
             if existing_idx is not None:
                 existing_entry = self.symbol_table.tab[existing_idx]
@@ -296,7 +277,7 @@ class SemanticAnalyzer:
             
             # Register ke symbol table
             if base_type == BaseType.ARRAY and array_ref is not None:
-                # PENTING: Untuk array, simpan ref ke atab!
+                # Untuk array, simpan ref ke atab!
                 var_idx = self.symbol_table.enter_identifier(
                     identifier, ObjType.VARIABLE, base_type.value, ref=array_ref
                 )
@@ -416,7 +397,7 @@ class SemanticAnalyzer:
                 elif value_node.children and hasattr(value_node.children[0], 'value'):
                     const_value = value_node.children[0].value
                 
-                # PERBAIKAN: Handle identifier constants (seperti MIN = MAX)
+    
                 if isinstance(const_value, str):
                     # Ini mungkin identifier constant
                     ref_idx = self.symbol_table.find_identifier(const_value)
@@ -767,30 +748,25 @@ class SemanticAnalyzer:
         """Extract identifiers dari identifier-list node - FIXED"""
         identifiers = []
         
-        # Debug: Print apa yang kita terima
+
         # print(f"DEBUG extract_identifiers: node.name={node.name}, children count={len(node.children)}")
         
         for child in node.children:
-            # Debug setiap child
             # print(f"  child.name={child.name}, has_token={child.token is not None}")
             
-            # METHOD 1: Cek jika child punya token dengan type IDENTIFIER
             if child.token and child.token.type == TokenType.IDENTIFIER:
                 identifiers.append(child.token.value)
                 # print(f"    -> Found identifier: {child.token.value}")
             
-            # METHOD 2: Cek jika name dimulai dengan "IDENTIFIER"
             # (untuk handle kasus parser yang bikin name jadi "IDENTIFIER('value')")
             elif child.name.startswith("IDENTIFIER") and child.token:
                 identifiers.append(child.token.value)
                 # print(f"    -> Found identifier via name: {child.token.value}")
             
-            # METHOD 3: Cek exact match (original method dari kode teman)
             elif child.name == "IDENTIFIER" and child.token:
                 identifiers.append(child.token.value)
                 # print(f"    -> Found identifier exact match: {child.token.value}")
         
-        # Debug: Print hasil
         # print(f"  RESULT: identifiers={identifiers}")
         return identifiers        
 
