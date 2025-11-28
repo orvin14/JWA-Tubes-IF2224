@@ -108,7 +108,6 @@ class SemanticAnalyzer:
                 self.symbol_table.leave_block()  
         
         return ast_node
-
     def visit_declaration_part(self, node: ParseNode) -> ASTNode:
         """Visit declaration part - support const, type, var, subprograms"""
         ast_node = ASTNode("Declarations")
@@ -504,208 +503,328 @@ class SemanticAnalyzer:
         if node.children:
             return self.visit(node.children[0])
         return ASTNode("Statement", data_type=BaseType.VOID)
-    
-    def visit_assignment_statement(self, node: ParseNode) -> ASTNode:
-        """Visit assignment statement - FIXED VERSION"""
-        target_node = None
-        value_node = None
-        assign_token = None
 
-        for child in node.children:
-            clean_name = self.clean_name(child.name)
-            if  child.name.startswith("IDENTIFIER"):
-                if child.token:
-                    var_name = child.token.value
-                    var_idx = self.symbol_table.find_identifier(var_name)
-                    
-                    if var_idx is not None:
-                        var_type = BaseType(self.symbol_table.tab[var_idx]["type"])
-                        target_node = VariableNode(
-                            "Variable", 
-                            identifier=var_name,
-                            token=child.token,
-                            data_type=var_type, 
-                            tab_index=var_idx
-                        )
-                    else:
-                        self.error(f"Undefined variable '{var_name}'", child.token)
-                        target_node = VariableNode("Variable", identifier=var_name,
-                                                token=child.token, data_type=BaseType.VOID)
-            
-            elif clean_name == "variable":
-                target_node = self.visit(child)
-            
-            elif clean_name == "assign_operator":
-                assign_token = child.token
-            
-            elif clean_name == "expression":
-                value_node = self.visit(child)
+    def visit_assignment_statement(self, node: ParseNode) -> ASTNode:
+        # Parse tree dari parser kamu: 
+        # children[0] = IDENTIFIER('nama')
+        # children[1] = ASSIGN_OPERATOR(':=')
+        # children[2] = <expression>
         
-        # Type checking
-        if target_node and value_node and target_node.data_type and value_node.data_type:
-            if not self.is_type_compatible(target_node.data_type, value_node.data_type):
-                self.error(
-                    f"Type mismatch: cannot assign {value_node.data_type.name} "
-                    f"to {target_node.data_type.name}",
-                    assign_token
-                )
-        
-        # Buat node assignment
-        ast_node = AssignmentNode("Assignment", data_type=BaseType.VOID)
-        if target_node:
-            ast_node.add_child(target_node)
-        if value_node:
-            ast_node.add_child(value_node)
-        
-        return ast_node
-    # ========== Expressions ==========
-    
-    def visit_expression(self, node: ParseNode) -> ASTNode:
-        """Visit expression"""
-        if len(node.children) == 1:
-            return self.visit(node.children[0])
-        else:
-            # Binary expression dengan relational operator
-            left_expr = self.visit(node.children[0])
-            
-            if len(node.children) < 3:
-                return left_expr
-                
-            operator_node = node.children[1]
-            right_expr = self.visit(node.children[2])
-            
-            # Extract operator value
-            operator_value = self.get_operator_value(operator_node)
-            
-            # Determine result type
-            result_type = self.get_expression_type(
-                left_expr.data_type, 
-                right_expr.data_type, 
-                operator_value
-            )
-            
-            ast_node = BinaryExpressionNode(
-                "BinaryExpression",
-                data_type=result_type,
-                operator=operator_value
-            )
-            ast_node.add_child(left_expr)
-            ast_node.add_child(right_expr)
-            return ast_node
-    
-    def visit_simple_expression(self, node: ParseNode) -> ASTNode:
-        """Visit simple expression"""
-        if len(node.children) == 1:
-            return self.visit(node.children[0])
-        
-        # Handle multiple terms dengan additive operators
-        result_node = self.visit(node.children[0])
-        
-        i = 1
-        while i < len(node.children) - 1:
-            operator_node = node.children[i]
-            right_term = self.visit(node.children[i + 1])
-            
-            operator_value = self.get_operator_value(operator_node)
-            
-            result_type = self.get_expression_type(
-                result_node.data_type,
-                right_term.data_type,
-                operator_value
-            )
-            
-            new_result = BinaryExpressionNode(
-                "BinaryExpression",
-                data_type=result_type,
-                operator=operator_value
-            )
-            new_result.add_child(result_node)
-            new_result.add_child(right_term)
-            result_node = new_result
-            i += 2
-        
-        return result_node
-    
-    def visit_term(self, node: ParseNode) -> ASTNode:
-        """Visit term"""
-        if len(node.children) == 1:
-            return self.visit(node.children[0])
-        
-        result_node = self.visit(node.children[0])
-        
-        i = 1
-        while i < len(node.children) - 1:
-            operator_node = node.children[i]
-            right_factor = self.visit(node.children[i + 1])
-            
-            operator_value = self.get_operator_value(operator_node)
-            
-            result_type = self.get_expression_type(
-                result_node.data_type,
-                right_factor.data_type,
-                operator_value
-            )
-            
-            new_result = BinaryExpressionNode(
-                "BinaryExpression",
-                data_type=result_type,
-                operator=operator_value
-            )
-            new_result.add_child(result_node)
-            new_result.add_child(right_factor)
-            result_node = new_result
-            i += 2
-        
-        return result_node
-    
-    def visit_factor(self, node: ParseNode) -> ASTNode:
-        """Visit factor"""
-        if not node.children:
-            return ASTNode("Factor", data_type=BaseType.VOID)
-        
-        first_child = node.children[0]
-        name = self.clean_name(first_child.name)
-        
-        # Number literal
-        if name == "NUMBER" and first_child.token:
-            value_str = first_child.token.value
-            if '.' in value_str:
-                return NumberNode("Number", token=first_child.token, data_type=BaseType.REAL, value=float(value_str))
-            else:
-                return NumberNode("Number", token=first_child.token, data_type=BaseType.INTEGER, value=int(value_str))
-        
-        # String literal
-        elif name == "STRING_LITERAL" and first_child.token:
-            return StringNode("String", token=first_child.token, data_type=BaseType.STRING, value=first_child.token.value)
-        
-        # Identifier (variable)
-        elif name == "IDENTIFIER" and first_child.token:
-            var_name = first_child.token.value
+        if len(node.children) < 3:
+            self.error("Invalid assignment statement structure", node.children[0].token if node.children else None)
+            return AssignmentNode("Assignment", data_type=BaseType.VOID)
+
+        target_child = node.children[0]   # IDENTIFIER('i')
+        assign_child = node.children[1]   # ASSIGN_OPERATOR
+        expr_child   = node.children[2]   # <expression>
+
+        # --- TARGET: IDENTIFIER ---
+        if target_child.name.startswith("IDENTIFIER") and target_child.token:
+            var_name = target_child.token.value
             var_idx = self.symbol_table.find_identifier(var_name)
             
             if var_idx is not None:
                 var_type = BaseType(self.symbol_table.tab[var_idx]["type"])
-                return VariableNode(
-                    "Variable", token=first_child.token, data_type=var_type, 
-                    tab_index=var_idx, identifier=var_name
-                )
+                target_node = VariableNode("Variable", identifier=var_name,
+                                        token=target_child.token, data_type=var_type,
+                                        tab_index=var_idx)
             else:
-                self.error(f"Undefined identifier '{var_name}'", first_child.token)
-                return VariableNode("Variable", token=first_child.token, data_type=BaseType.VOID, identifier=var_name)
-        
-        # Parenthesized expression
-        elif name == "LPARENTHESIS":
-            if len(node.children) > 1:
-                return self.visit(node.children[1])
-                
-        # Handle Logical NOT / Unary operators if any
-        elif name == "LOGICAL_OPERATOR" or name == "factor": 
-             if len(node.children) > 0:
-                 # Recursively visit (simplified)
-                 return self.visit(node.children[-1])
+                self.error(f"Undefined variable '{var_name}'", target_child.token)
+                target_node = VariableNode("Variable", identifier=var_name,
+                                        token=target_child.token, data_type=BaseType.VOID)
+        else:
+            self.error("Assignment target must be identifier", target_child.token if hasattr(target_child, 'token') else None)
+            target_node = ASTNode("UnknownTarget")
 
-        return ASTNode("Factor", data_type=BaseType.VOID)
+        # --- VALUE: Expression ---
+        value_node = self.visit(expr_child)
+        if not value_node:
+            value_node = ASTNode("UnknownValue", data_type=BaseType.VOID)
+
+        # --- Type Checking ---
+        if (target_node.data_type != BaseType.VOID and 
+            value_node.data_type != BaseType.VOID):
+            if not self.is_type_compatible(target_node.data_type, value_node.data_type):
+                self.error(f"Type mismatch: cannot assign {value_node.data_type.name} to {target_node.data_type.name}",
+                        assign_child.token if hasattr(assign_child, 'token') else None)
+
+        # --- Buat Assignment Node ---
+        assign_node = AssignmentNode("Assignment", data_type=BaseType.VOID)
+        assign_node.add_child(target_node)
+        assign_node.add_child(value_node)
+        
+        # Biar tampilan AST bagus
+        if hasattr(target_node, 'identifier'):
+            assign_node.identifier = target_node.identifier
+
+        return assign_node
+    # def visit_expression(self, node: ParseNode) -> ASTNode:
+    #     """Visit expression"""
+    #     if len(node.children) == 1:
+    #         return self.visit(node.children[0])
+    #     else:
+    #         # Binary expression dengan relational operator
+    #         left_expr = self.visit(node.children[0])
+            
+    #         if len(node.children) < 3:
+    #             return left_expr
+                
+    #         operator_node = node.children[1]
+    #         right_expr = self.visit(node.children[2])
+            
+    #         # Extract operator value
+    #         operator_value = self.get_operator_value(operator_node)
+            
+    #         # Determine result type
+    #         result_type = self.get_expression_type(
+    #             left_expr.data_type, 
+    #             right_expr.data_type, 
+    #             operator_value
+    #         )
+            
+    #         ast_node = BinaryExpressionNode(
+    #             "BinaryExpression",
+    #             data_type=result_type,
+    #             operator=operator_value
+    #         )
+    #         ast_node.add_child(left_expr)
+    #         ast_node.add_child(right_expr)
+    #         return ast_node
     
+    # def visit_simple_expression(self, node: ParseNode) -> ASTNode:
+    #     """Visit simple expression"""
+    #     if len(node.children) == 1:
+    #         return self.visit(node.children[0])
+        
+    #     # Handle multiple terms dengan additive operators
+    #     result_node = self.visit(node.children[0])
+        
+    #     i = 1
+    #     while i < len(node.children) - 1:
+    #         operator_node = node.children[i]
+    #         right_term = self.visit(node.children[i + 1])
+            
+    #         operator_value = self.get_operator_value(operator_node)
+            
+    #         result_type = self.get_expression_type(
+    #             result_node.data_type,
+    #             right_term.data_type,
+    #             operator_value
+    #         )
+            
+    #         new_result = BinaryExpressionNode(
+    #             "BinaryExpression",
+    #             data_type=result_type,
+    #             operator=operator_value
+    #         )
+    #         new_result.add_child(result_node)
+    #         new_result.add_child(right_term)
+    #         result_node = new_result
+    #         i += 2
+        
+    #     return result_node
+    
+    # def visit_term(self, node: ParseNode) -> ASTNode:
+    #     """Visit term"""
+    #     if len(node.children) == 1:
+    #         return self.visit(node.children[0])
+        
+    #     result_node = self.visit(node.children[0])
+        
+    #     i = 1
+    #     while i < len(node.children) - 1:
+    #         operator_node = node.children[i]
+    #         right_factor = self.visit(node.children[i + 1])
+            
+    #         operator_value = self.get_operator_value(operator_node)
+            
+    #         result_type = self.get_expression_type(
+    #             result_node.data_type,
+    #             right_factor.data_type,
+    #             operator_value
+    #         )
+            
+    #         new_result = BinaryExpressionNode(
+    #             "BinaryExpression",
+    #             data_type=result_type,
+    #             operator=operator_value
+    #         )
+    #         new_result.add_child(result_node)
+    #         new_result.add_child(right_factor)
+    #         result_node = new_result
+    #         i += 2
+        
+    #     return result_node
+    
+    # def visit_factor(self, node: ParseNode) -> ASTNode:
+    #     """Visit factor"""
+    #     if not node.children:
+    #         return ASTNode("Factor", data_type=BaseType.VOID)
+        
+    #     first_child = node.children[0]
+    #     name = self.clean_name(first_child.name)
+        
+    #     # Number literal
+    #     if name == "NUMBER" and first_child.token:
+    #         value_str = first_child.token.value
+    #         if '.' in value_str:
+    #             return NumberNode("Number", token=first_child.token, data_type=BaseType.REAL, value=float(value_str))
+    #         else:
+    #             return NumberNode("Number", token=first_child.token, data_type=BaseType.INTEGER, value=int(value_str))
+        
+    #     # String literal
+    #     elif name == "STRING_LITERAL" and first_child.token:
+    #         return StringNode("String", token=first_child.token, data_type=BaseType.STRING, value=first_child.token.value)
+        
+    #     # Identifier (variable)
+    #     elif name == "IDENTIFIER" and first_child.token:
+    #         var_name = first_child.token.value
+    #         var_idx = self.symbol_table.find_identifier(var_name)
+            
+    #         if var_idx is not None:
+    #             var_type = BaseType(self.symbol_table.tab[var_idx]["type"])
+    #             return VariableNode(
+    #                 "Variable", token=first_child.token, data_type=var_type, 
+    #                 tab_index=var_idx, identifier=var_name
+    #             )
+    #         else:
+    #             self.error(f"Undefined identifier '{var_name}'", first_child.token)
+    #             return VariableNode("Variable", token=first_child.token, data_type=BaseType.VOID, identifier=var_name)
+        
+    #     # Parenthesized expression
+    #     elif name == "LPARENTHESIS":
+    #         if len(node.children) > 1:
+    #             return self.visit(node.children[1])
+                
+    #     # Handle Logical NOT / Unary operators if any
+    #     elif name == "LOGICAL_OPERATOR" or name == "factor": 
+    #          if len(node.children) > 0:
+    #              # Recursively visit (simplified)
+    #              return self.visit(node.children[-1])
+
+    #     return ASTNode("Factor", data_type=BaseType.VOID)
+    def visit_expression(self, node: ParseNode) -> ASTNode:
+        # <expression> → <simple-expression> [ <relop> <simple-expression> ]
+        if len(node.children) == 1:
+            return self.visit(node.children[0])  
+        elif len(node.children) == 3:
+            left = self.visit(node.children[0])   # simple-expression
+            op_node = node.children[1]
+            right = self.visit(node.children[2])  # simple-expression
+            
+            op = op_node.token.value
+            rel_op_map = {'>': 'GT', '<': 'LT', '>=': 'GE', '<=': 'LE', '=': 'EQ', '<>': 'NE'}
+            operator = rel_op_map.get(op, 'UNKNOWN')
+            
+            result_type = BaseType.BOOLEAN
+            bin_node = BinaryExpressionNode("RelationalExpression", data_type=result_type, operator=operator)
+            bin_node.add_child(left)
+            bin_node.add_child(right)
+            return bin_node
+        else:
+            return ASTNode("InvalidExpression", data_type=BaseType.VOID)
+
+
+    def visit_simple_expression(self, node: ParseNode) -> ASTNode:
+        # <simple-expression> → [+-] <term> { (+|-|atau) <term> }
+        children = [c for c in node.children if c.name != "<empty>"]
+        if not children:
+            return ASTNode("EmptySimpleExpr", data_type=BaseType.VOID)
+            
+        result = self.visit(children[0])
+        
+        i = 1
+        while i < len(children):
+            op_node = children[i]
+            term_node = children[i+1]
+            right = self.visit(term_node)
+            
+            op = op_node.token.value if hasattr(op_node, 'token') else ""
+            if op in ['+', '-']:
+                new_type = self.arithmetic_type_promotion(result.data_type, right.data_type)
+                bin_node = BinaryExpressionNode("AdditiveExpression", data_type=new_type, operator=op)
+            elif op == 'atau':
+                bin_node = BinaryExpressionNode("OrExpression", data_type=BaseType.BOOLEAN, operator="atau")
+            else:
+                bin_node = ASTNode("UnknownOp")
+                
+            bin_node.add_child(result)
+            bin_node.add_child(right)
+            result = bin_node
+            i += 2
+            
+        return result
+
+
+    def visit_term(self, node: ParseNode) -> ASTNode:
+        # <term> → <factor> { (*|/|bagi|mod|dan) <factor> }
+        children = [c for c in node.children if c.name != "<empty>"]
+        if not children:
+            return ASTNode("EmptyTerm", data_type=BaseType.VOID)
+            
+        result = self.visit(children[0])
+        
+        i = 1
+        while i < len(children):
+            op_node = children[i]
+            factor_node = children[i+1]
+            right = self.visit(factor_node)
+            
+            op = op_node.token.value if hasattr(op_node, 'token') else ""
+            if op in ['*', '/', 'bagi', 'mod']:
+                new_type = self.arithmetic_type_promotion(result.data_type, right.data_type)
+                bin_node = BinaryExpressionNode("MultiplicativeExpression", data_type=new_type, operator=op)
+            elif op == 'dan':
+                bin_node = BinaryExpressionNode("AndExpression", data_type=BaseType.BOOLEAN, operator="dan")
+            else:
+                bin_node = ASTNode("UnknownOp")
+                
+            bin_node.add_child(result)
+            bin_node.add_child(right)
+            result = bin_node
+            i += 2
+            
+        return result
+
+
+    def visit_factor(self, node: ParseNode) -> ASTNode:
+        first_child = node.children[0]
+        
+        # NUMBER
+        if first_child.name.startswith("NUMBER"):
+            val = int(first_child.token.value) if '.' not in first_child.token.value else float(first_child.token.value)
+            return NumberNode("Number", data_type=BaseType.INTEGER if isinstance(val, int) else BaseType.REAL, value=val)
+        
+        # CHAR_LITERAL → 'a'
+        elif first_child.name.startswith("CHAR_LITERAL") or first_child.name.startswith("STRING_LITERAL"):
+            val = first_child.token.value.strip("'")
+            return CharNode("Char", data_type=BaseType.CHAR, value=val)
+        
+        # IDENTIFIER → variabel biasa
+        elif first_child.name.startswith("IDENTIFIER"):
+            var_name = first_child.token.value
+            var_idx = self.symbol_table.find_identifier(var_name)
+            if var_idx is not None:
+                var_type = BaseType(self.symbol_table.tab[var_idx]["type"])
+                return VariableNode("Variable", identifier=var_name, token=first_child.token,
+                                data_type=var_type, tab_index=var_idx)
+            else:
+                self.error(f"Undefined variable '{var_name}'", first_child.token)
+                return VariableNode("Variable", identifier=var_name, data_type=BaseType.VOID)
+        
+        # ( expression )
+        elif first_child.name.startswith("LPARENTHESIS"):
+            return self.visit(node.children[1])  # langsung visit expression di dalam kurung
+        
+        # tidak <factor>
+        elif first_child.name.startswith("LOGICAL_OPERATOR") and first_child.token.value == "tidak":
+            operand = self.visit(node.children[1])
+            not_node = UnaryExpressionNode("NotExpression", data_type=BaseType.BOOLEAN, operator="tidak")
+            not_node.add_child(operand)
+            return not_node
+        
+        else:
+            return ASTNode("UnknownFactor", data_type=BaseType.VOID)
     def visit_procedure_call(self, node: ParseNode) -> ASTNode:
         """Visit procedure call"""
         proc_name = ""
@@ -747,8 +866,6 @@ class SemanticAnalyzer:
     def extract_identifiers(self, node: ParseNode) -> List[str]:
         """Extract identifiers dari identifier-list node - FIXED"""
         identifiers = []
-        
-
         # print(f"DEBUG extract_identifiers: node.name={node.name}, children count={len(node.children)}")
         
         for child in node.children:
@@ -766,7 +883,6 @@ class SemanticAnalyzer:
             elif child.name == "IDENTIFIER" and child.token:
                 identifiers.append(child.token.value)
                 # print(f"    -> Found identifier exact match: {child.token.value}")
-        
         # print(f"  RESULT: identifiers={identifiers}")
         return identifiers        
 

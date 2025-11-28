@@ -2,171 +2,87 @@ from .ast_nodes import *
 from .semantic_analyzer import SemanticAnalyzer
 
 def print_decorated_ast(node: ASTNode, level: int = 0, prefix: str = "", is_last: bool = True):
-    """
-    Print decorated AST dengan informasi tipe dan symbol table references
-    Format output sesuai contoh di spesifikasi
-    """
-    
+    indent = "    " * level
+    connector = "└─ " if is_last else "├─ "
+    child_prefix = "    " if is_last else "│   "
+
     if level == 0:
-        connector = ""
-        child_prefix = ""
-    else:
-        connector = " └─ " if is_last else " ├─ "
-        child_prefix = "    " if is_last else " │  "
-    
-    # Print ProgramNode
-    if isinstance(node, ProgramNode):
         print(f"ProgramNode(name: '{node.name}')")
-        
-        for i, child in enumerate(node.children):
-            is_last_child = (i == len(node.children) - 1)
-            new_prefix = prefix + child_prefix
-            print_decorated_ast(child, level + 1, new_prefix, is_last_child)
-    
-    # Print Declarations
-    elif node.node_type == "Declarations":
-        print(prefix + connector + "Declarations")
-        
-        for i, child in enumerate(node.children):
-            is_last_child = (i == len(node.children) - 1)
-            new_prefix = prefix + child_prefix
-            print_decorated_ast(child, level + 1, new_prefix, is_last_child)
-    
-    # Print VarDecl
-    elif isinstance(node, VarDeclNode):
-        decorators = []
-        if node.tab_index >= 0:
-            decorators.append(f"tab_index:{node.tab_index}")
-        if node.data_type:
-            decorators.append(f"type:{node.data_type.name.lower()}")
-        decorators.append(f"lev:{node.block_index}")
-        
-        decorator_str = f" → {', '.join(decorators)}"
-        print(prefix + connector + f"VarDecl('{node.identifier}'){decorator_str}")
-    
-    # Print CompoundStatement (Block)
-    elif node.node_type == "CompoundStatement":
-        decorators = []
-        if node.block_index >= 0:
-            decorators.append(f"block_index:{node.block_index}")
-        decorators.append(f"lev:1")
-        
-        decorator_str = f" → {', '.join(decorators)}"
-        print(prefix + connector + f"Block{decorator_str}")
-        
-        for i, child in enumerate(node.children):
-            is_last_child = (i == len(node.children) - 1)
-            new_prefix = prefix + child_prefix
-            print_decorated_ast(child, level + 1, new_prefix, is_last_child)
-    
-    # Print Assignment
-    elif isinstance(node, AssignmentNode):
-        if len(node.children) >= 2:
-            target = node.children[0]
-            value = node.children[1]
-            
-            target_str = f"'{target.identifier}'" if isinstance(target, VariableNode) else str(target)
-            
-            if isinstance(value, BinaryExpressionNode):
-                if len(value.children) >= 2:
-                    left = value.children[0]
-                    right = value.children[1]
-                    left_str = f"'{left.identifier}'" if isinstance(left, VariableNode) else str(left)
-                    right_str = str(right)
-                    value_str = f"{left_str}{value.operator}{right_str}"
-                else:
-                    value_str = str(value)
-            else:
-                value_str = str(value)
-            
-            assign_str = f"Assign({target_str} := {value_str})"
+        decl_node = None
+        block_node = None
+        for child in node.children:
+            if child.node_type == "Declarations":
+                decl_node = child
+            elif child.node_type == "CompoundStatement":
+                block_node = child
+
+        if decl_node:
+            print(" ├─ Declarations")
+            for i, child in enumerate(decl_node.children):
+                last = i == len(decl_node.children) - 1
+                print_decorated_ast(child, level + 2, " │   " if not last else "     ", last)
+
+        if block_node:
+            print(f" └─ Block → block_index:{block_node.block_index}, lev:1")
+            for i, stmt in enumerate(block_node.children):
+                last = i == len(block_node.children) - 1
+                print_decorated_ast(stmt, level + 2, "     ", last)
+        return
+
+    # VarDecl
+    if isinstance(node, VarDeclNode):
+        deco = f"tab_index:{node.tab_index}, type:{node.data_type.name.lower()}, lev:0"
+        print(f"{prefix}{connector}VarDecl('{node.identifier}') → {deco}")
+        return
+
+    # Assignment
+    if isinstance(node, AssignmentNode) and len(node.children) >= 2:
+        target = node.children[0]
+        value = node.children[1]
+
+        target_name = target.identifier if hasattr(target, 'identifier') else "???"
+
+        # Format value
+        if isinstance(value, NumberNode):
+            val_str = f"{value.value} → type={'integer' if isinstance(value.value, int) else 'real'}"
+        elif isinstance(value, CharNode):
+            val_str = f"'{value.value}' → type:char"
+        elif isinstance(value, CharNode):
+            val_str = f"'{value.value}' → type:char"
+        elif isinstance(value, UnaryExpressionNode):
+            opd = value.children[0]
+            inner = str(opd).split("→")[0].strip() if "→" in str(opd) else str(opd)
+            val_str = f"NotExpression({inner}) → type:boolean"
+        elif isinstance(value, BinaryExpressionNode):
+            op_map = {'GT': '>', 'LT': '<', 'GE': '>=', 'LE': '<=', 'EQ': '=', 'NE': '<>'}
+            op = op_map.get(value.operator, value.operator)
+            l = f"'{value.children[0].identifier}'" if hasattr(value.children[0], 'identifier') else str(value.children[0])
+            r = str(value.children[1])
+            val_str = f"({l} {op} {r}) → type:boolean"
         else:
-            assign_str = "Assign(?)"
-        
-        decorators = []
-        if node.data_type:
-            decorators.append(f"type:{node.data_type.name.lower()}")
-        
-        decorator_str = f" → {', '.join(decorators)}" if decorators else ""
-        print(prefix + connector + f"{assign_str}{decorator_str}")
-        
-        # Print children details
-        if len(node.children) >= 2:
-            target = node.children[0]
-            value = node.children[1]
-            
-            if isinstance(target, VariableNode):
-                decorators = []
-                if target.tab_index >= 0:
-                    decorators.append(f"tab_index:{target.tab_index}")
-                if target.data_type:
-                    decorators.append(f"type:{target.data_type.name.lower()}")
-                
-                decorator_str = f" → {', '.join(decorators)}" if decorators else ""
-                print(prefix + child_prefix + " ├─ " + f"target '{target.identifier}'{decorator_str}")
-            
-            if isinstance(value, BinaryExpressionNode):
-                decorators = []
-                if value.data_type:
-                    decorators.append(f"type:{value.data_type.name.lower()}")
-                
-                decorator_str = f" → {', '.join(decorators)}" if decorators else ""
-                print(prefix + child_prefix + " └─ " + f"BinOp '{value.operator}'{decorator_str}")
-                
-                if len(value.children) >= 2:
-                    left = value.children[0]
-                    right = value.children[1]
-                    
-                    # Left operand
-                    if isinstance(left, (VariableNode, NumberNode)):
-                        left_decorators = []
-                        if hasattr(left, 'tab_index') and left.tab_index >= 0:
-                            left_decorators.append(f"tab_index:{left.tab_index}")
-                        if left.data_type:
-                            left_decorators.append(f"type:{left.data_type.name.lower()}")
-                        
-                        left_decorator_str = f" → {', '.join(left_decorators)}" if left_decorators else ""
-                        left_repr = f"'{left.identifier}'" if isinstance(left, VariableNode) else str(left)
-                        print(prefix + child_prefix + "     ├─ " + f"{left_repr}{left_decorator_str}")
-                    
-                    # Right operand
-                    if isinstance(right, (VariableNode, NumberNode)):
-                        right_decorators = []
-                        if hasattr(right, 'tab_index') and right.tab_index >= 0:
-                            right_decorators.append(f"tab_index:{right.tab_index}")
-                        if right.data_type:
-                            right_decorators.append(f"type:{right.data_type.name.lower()}")
-                        
-                        right_decorator_str = f" → {', '.join(right_decorators)}" if right_decorators else ""
-                        right_repr = f"'{right.identifier}'" if isinstance(right, VariableNode) else str(right)
-                        print(prefix + child_prefix + "     └─ " + f"{right_repr}{right_decorator_str}")
-    
-    # Print ProcedureCall
-    elif isinstance(node, ProcedureCallNode):
-        decorators = []
-        if node.tab_index >= 0:
-            if node.procedure_name in ['writeln', 'readln', 'write', 'read']:
-                decorators.append("predefined")
-            decorators.append(f"tab_index:{node.tab_index}")
-        
-        decorator_str = f" → {', '.join(decorators)}" if decorators else ""
-        print(prefix + connector + f"{node.procedure_name}(...){decorator_str}")
-    
-    # Default: process children
-    else:
-        for i, child in enumerate(node.children):
-            is_last_child = (i == len(node.children) - 1)
-            new_prefix = prefix + child_prefix
-            print_decorated_ast(child, level + 1, new_prefix, is_last_child)
+            val_str = str(value)
 
+        print(f"{prefix}{connector}Assign('{target_name}' := {val_str}) → type:void")
 
+        # Target detail
+        tgt_deco = f"tab_index:{target.tab_index}, type:{target.data_type.name.lower()}"
+        print(f"{prefix}{child_prefix}├─ target '{target_name}' → {tgt_deco}")
+
+        # Value detail
+        print(f"{prefix}{child_prefix}└─ value {val_str.split('→')[0].strip()} → {val_str.split('→')[-1].strip()}")
+        return
+
+    # Fallback
+    print(f"{prefix}{connector}{node}")
+    for i, child in enumerate(node.children):
+        last = i == len(node.children) - 1
+        print_decorated_ast(child, level + 1, prefix + child_prefix, last)
 def print_symbol_tables(analyzer: SemanticAnalyzer):
     """
     Print symbol tables (tab, btab, atab)
     """
     print("\n=== SYMBOL TABLES ===")
     
-    # Print tab (identifier table)
     print("\nIdentifier Table (tab):")
     print("Idx  Name        Obj        Type    Ref  Nrm  Lev  Adr  Link")
     print("-" * 60)

@@ -78,8 +78,8 @@ class AssignmentNode(ASTNode):
         return "Assign(?)"
 
 @dataclass
+@dataclass
 class BinaryExpressionNode(ASTNode):
-    """Node untuk binary expression (operator dengan 2 operand)"""
     operator: str = ""
     
     def __init__(self, node_type: str, operator: str = "", **kwargs):
@@ -90,10 +90,23 @@ class BinaryExpressionNode(ASTNode):
         if len(self.children) >= 2:
             left = self.children[0]
             right = self.children[1]
+            
+            # TRANSLATE KODE OPERATOR KE SIMBOL ASLI
+            op_map = {
+                'GT': '>', 'LT': '<', 'GE': '>=', 'LE': '<=', 
+                'EQ': '=', 'NE': '<>', 'AND': ' dan ', 'OR': ' atau '
+            }
+            pretty_op = op_map.get(self.operator, self.operator)
+            
             left_str = f"'{left.identifier}'" if isinstance(left, VariableNode) else str(left)
-            right_str = str(right)
-            return f"{left_str}{self.operator}{right_str}"
+            right_str = str(right.value) if hasattr(right, 'value') else (
+                        f"'{right.identifier}'" if isinstance(right, VariableNode) else str(right)
+                    )
+            
+            return f"{left_str}{pretty_op}{right_str}"
         return f"BinOp '{self.operator}'"
+
+
 
 @dataclass
 class VariableNode(ASTNode):
@@ -158,3 +171,30 @@ class ProcedureCallNode(ASTNode):
     
     def __repr__(self):
         return f"ProcedureCall('{self.procedure_name}')"
+    
+@dataclass
+class CharNode(ASTNode):
+    """Node untuk karakter literal ('A')"""
+    value: str = ""
+    
+    def __init__(self, node_type: str = "Char", value: str = "", **kwargs):
+        super().__init__(node_type, **kwargs)
+        self.value = value
+    
+    def __repr__(self):
+        return f"'{self.value}'"
+
+@dataclass
+class UnaryExpressionNode(ASTNode):
+    operator: str = ""
+    
+    def __init__(self, node_type: str = "UnaryExpr", operator: str = "", **kwargs):
+        super().__init__(node_type, **kwargs)
+        self.operator = operator
+    
+    def __repr__(self):
+        if self.children:
+            operand = self.children[0]
+            op = "tidak " if self.operator == "tidak" else f"{self.operator} "
+            return f"{op}({operand})"
+        return f"{self.operator}(?)"
