@@ -138,18 +138,33 @@ class SemanticAnalyzer:
     # ========== Declarations ==========
     
     def visit_declaration_part(self, node: ParseNode) -> ASTNode:
-        """Visit declaration part"""
+        """Visit declaration part - support const, type, var, subprograms"""
         ast_node = ASTNode("Declarations")
         
         for child in node.children:
             name = self.clean_name(child.name)
-            if name == "var-declaration":
+            
+            if name == "const-declaration":
+                const_ast = self.visit(child)
+                for const_child in const_ast.children:
+                    ast_node.add_child(const_child)
+            
+            elif name == "type-declaration":
+                type_ast = self.visit(child)
+                for type_child in type_ast.children:
+                    ast_node.add_child(type_child)
+            
+            elif name == "var-declaration":
                 var_decl_ast = self.visit(child)
-                # Extract VarDecl nodes dan attach ke AST
                 for var_decl_child in var_decl_ast.children:
                     if isinstance(var_decl_child, VarDeclNode):
-                        var_decl_child.block_index = 0  # Global level
+                        var_decl_child.block_index = 0
                         ast_node.add_child(var_decl_child)
+            
+            elif name == "subprogram-declaration":
+                subprogram_ast = self.visit(child)
+                if subprogram_ast:
+                    ast_node.add_child(subprogram_ast)
         
         return ast_node
     
