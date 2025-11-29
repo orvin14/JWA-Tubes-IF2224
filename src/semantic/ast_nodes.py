@@ -93,19 +93,33 @@ class BinaryExpressionNode(ASTNode):
             # TRANSLATE KODE OPERATOR KE SIMBOL ASLI
             op_map = {
                 'GT': '>', 'LT': '<', 'GE': '>=', 'LE': '<=', 
-                'EQ': '=', 'NE': '<>', 'AND': ' dan ', 'OR': ' atau '
+                'EQ': '=', 'NE': '<>', 'AND': ' dan ', 'OR': ' atau ',
+                '+': '+', '-': '-', '*': '*', '/': '/', 
+                'bagi': ' bagi ', 'mod': ' mod ', 
+                'dan': ' dan ', 'atau': ' atau '
             }
             pretty_op = op_map.get(self.operator, self.operator)
             
-            left_str = f"'{left.identifier}'" if isinstance(left, VariableNode) else str(left)
-            right_str = str(right.value) if hasattr(right, 'value') else (
-                        f"'{right.identifier}'" if isinstance(right, VariableNode) else str(right)
-                    )
+            # --- FUNGSI BANTU UNTUK FORMAT REKURSIF DENGAN KURUNG ---
+            def format_operand(operand):
+                if isinstance(operand, VariableNode):
+                    return f"'{operand.identifier}'"
+                elif isinstance(operand, (NumberNode, CharNode)):
+                    return repr(operand)
+                elif isinstance(operand, (BinaryExpressionNode, UnaryExpressionNode)):
+                    return f"({repr(operand)})" 
+                return repr(operand)
+
+            left_str = format_operand(left)
+            right_str = format_operand(right)
             
-            return f"{left_str}{pretty_op}{right_str}"
+            # Atur spasi: tidak ada spasi untuk operator aritmatika sederhana
+            if pretty_op in ['+', '-', '*', '/']:
+                 return f"{left_str}{pretty_op}{right_str}"
+            else:
+                 return f"{left_str}{pretty_op}{right_str}"
+                 
         return f"BinOp '{self.operator}'"
-
-
 
 @dataclass
 class VariableNode(ASTNode):

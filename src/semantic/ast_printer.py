@@ -42,26 +42,23 @@ def print_decorated_ast(node: ASTNode, level: int = 0, prefix: str = "", is_last
 
         target_name = target.identifier if hasattr(target, 'identifier') else "???"
 
-        # Format value
-        if isinstance(value, NumberNode):
-            val_str = f"{value.value} → type={'integer' if isinstance(value.value, int) else 'real'}"
-        elif isinstance(value, CharNode):
-            val_str = f"'{value.value}' → type:char"
-        elif isinstance(value, CharNode):
-            val_str = f"'{value.value}' → type:char"
+        # Format value - Cukup panggil repr() dan tambahkan tipe.
+        expr_type = value.data_type.name.lower() if value.data_type else 'unknown'
+        
+        # Pastikan kita mendapatkan representasi string ekspresi yang bersih
+        if isinstance(value, (NumberNode, CharNode)):
+            raw_val_str = repr(value)
+            val_str = f"{raw_val_str} → type={expr_type}"
         elif isinstance(value, UnaryExpressionNode):
-            opd = value.children[0]
-            inner = str(opd).split("→")[0].strip() if "→" in str(opd) else str(opd)
-            val_str = f"NotExpression({inner}) → type:boolean"
+            raw_val_str = repr(value)
+            val_str = f"{raw_val_str} → type:boolean"
         elif isinstance(value, BinaryExpressionNode):
-            op_map = {'GT': '>', 'LT': '<', 'GE': '>=', 'LE': '<=', 'EQ': '=', 'NE': '<>'}
-            op = op_map.get(value.operator, value.operator)
-            l = f"'{value.children[0].identifier}'" if hasattr(value.children[0], 'identifier') else str(value.children[0])
-            r = str(value.children[1])
-            expr_type = value.data_type.name.lower() if value.data_type else 'unknown'
-            val_str = f"({l} {op} {r}) → type:{expr_type}"
+            # Gunakan repr rekursif yang sudah diperbaiki di ast_nodes.py
+            raw_val_str = repr(value)
+            val_str = f"({raw_val_str}) → type:{expr_type}"
         else:
-            val_str = str(value)
+            raw_val_str = repr(value)
+            val_str = f"{raw_val_str} → type:{expr_type}"
 
         print(f"{prefix}{connector}Assign('{target_name}' := {val_str}) → type:void")
 
