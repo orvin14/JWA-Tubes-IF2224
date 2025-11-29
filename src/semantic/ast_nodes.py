@@ -78,7 +78,6 @@ class AssignmentNode(ASTNode):
         return "Assign(?)"
 
 @dataclass
-@dataclass
 class BinaryExpressionNode(ASTNode):
     operator: str = ""
     
@@ -198,3 +197,49 @@ class UnaryExpressionNode(ASTNode):
             op = "tidak " if self.operator == "tidak" else f"{self.operator} "
             return f"{op}({operand})"
         return f"{self.operator}(?)"
+
+
+@dataclass
+class CompoundStatementNode(ASTNode):
+    """Node untuk compound statement (mulai ... selesai)"""
+    
+    def __repr__(self):
+        if self.block_index != -1:
+            return f"CompoundStatement → block_index:{self.block_index}"
+        return "CompoundStatement"
+
+@dataclass
+class ForStatementNode(ASTNode):
+    """Node untuk for loop"""
+    is_downto: bool = False
+    
+    def __repr__(self):
+        if len(self.children) >= 3:
+            var = self.children[0]
+            start = self.children[1]
+            end = self.children[2]
+            dir = "downto" if self.is_downto else "to"
+            return f"ForStatement({var} := {start} {dir} {end})"
+        return "ForStatement(?)"
+
+@dataclass
+class IfStatementNode(ASTNode):
+    """Node untuk if statement"""
+    
+    def __repr__(self):
+        if self.children:
+            cond = self.children[0]
+            then_part = " then ..." if len(self.children) > 1 else ""
+            else_part = " else ..." if len(self.children) > 2 else ""
+            return f"IfStatement({cond}{then_part}{else_part})"
+        return "IfStatement(?)"
+
+@dataclass
+class WhileStatementNode(ASTNode):
+    """Node untuk while loop"""
+    
+    def __repr__(self):
+        if self.children:
+            cond = self.children[0]
+            return f"WhileStatement({cond})"
+        return "WhileStatement(?)"
