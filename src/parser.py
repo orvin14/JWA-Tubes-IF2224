@@ -38,17 +38,12 @@ class Parser:
         return None
 
     def eat(self, token_type: TokenType, token_value=None):
-        """
-        Memeriksa token, membuat ParseNode terminal, dan maju.
-        """
         if (self.current_token and 
             self.current_token.type == token_type and
             (token_value is None or self.current_token.value.lower() == token_value)):
             
             token = self.current_token
             self.advance()
-            
-            # Return ParseNode langsung
             node_name = f"{token.type.name}({token.value!r})"
             return ParseNode(node_name, token)
         else:
@@ -83,10 +78,9 @@ class Parser:
         node = ParseNode("<var-declaration>")
         node.add_child(self.eat(TokenType.KEYWORD, "variabel"))
         
-        # PERUBAHAN: Gunakan parse_var_item() dalam loop
         while (self.current_token and 
             self.current_token.type == TokenType.IDENTIFIER):
-            node.add_child(self.parse_var_item())  # ← BARU!
+            node.add_child(self.parse_var_item())
         
         return node
     
@@ -97,7 +91,6 @@ class Parser:
         return node
     
     def parse_var_item(self):
-        """Parse satu kelompok deklarasi variabel"""
         node = ParseNode("<var-item>")
         node.add_child(self.parse_identifier_list())
         node.add_child(self.eat(TokenType.COLON))
@@ -247,49 +240,90 @@ class Parser:
         return node
 
     def parse_expression(self):
+        """
+        <expression> ::= <simple-expression> [<relational-op> <simple-expression>]
+        Level 1 (terendah): Relational operators (>, <, =, dll)
+        """
         node = ParseNode("<expression>")
         node.add_child(self.parse_simple_expression())
+        
         if self.current_token and self.current_token.type == TokenType.RELATIONAL_OPERATOR:
             rel_op_node = self.eat(TokenType.RELATIONAL_OPERATOR)
             node.add_child(rel_op_node)
             node.add_child(self.parse_simple_expression())
+        
         return node
 
     def parse_simple_expression(self):
+
         node = ParseNode("<simple-expression>")
         
-        if self.current_token and self.current_token.type == TokenType.ARITHMETIC_OPERATOR and self.current_token.value in ['+', '-']:
+        # Handle unary +/-
+        if (self.current_token and 
+            self.current_token.type == TokenType.ARITHMETIC_OPERATOR and 
+            self.current_token.value in ['+', '-']):
             node.add_child(self.eat(TokenType.ARITHMETIC_OPERATOR, self.current_token.value))
-            
-        node.add_child(self.parse_term())
+
+        node.add_child(self.parse_or_term())
         
         while (self.current_token and 
-               ((self.current_token.type == TokenType.ARITHMETIC_OPERATOR and self.current_token.value in ['+', '-']) or 
-                (self.current_token.type == TokenType.LOGICAL_OPERATOR and self.current_token.value == 'atau'))):
-            if self.current_token.value == 'atau':
-                node.add_child(self.eat(TokenType.LOGICAL_OPERATOR, "atau"))
-            else:
-                node.add_child(self.eat(TokenType.ARITHMETIC_OPERATOR, self.current_token.value))
+               self.current_token.type == TokenType.LOGICAL_OPERATOR and 
+               self.current_token.value == 'atau'):
+            node.add_child(self.eat(TokenType.LOGICAL_OPERATOR, "atau"))
+            node.add_child(self.parse_or_term())
+        
+        return node
+
+    def parse_or_term(self):
+        """
+        <or-term> ::= <term> { ('+'|'-') <term> }
+        Level 3: Additive operators (+, -)
+        """
+        node = ParseNode("<or-term>")
+        node.add_child(self.parse_term())
+        
+        # Handle +/- operators (HANYA +/-, TIDAK campur 'atau')
+        while (self.current_token and 
+               self.current_token.type == TokenType.ARITHMETIC_OPERATOR and 
+               self.current_token.value in ['+', '-']):
+            node.add_child(self.eat(TokenType.ARITHMETIC_OPERATOR, self.current_token.value))
             node.add_child(self.parse_term())
+        
         return node
 
     def parse_term(self):
+        """
+        <term> ::= <and-factor> { 'dan' <and-factor> }
+        Level 4: Logical AND (precedence tinggi, setara *)
+        """
         node = ParseNode("<term>")
+        node.add_child(self.parse_and_factor())
+        
+        # Handle 'dan' operator (HANYA dan, TIDAK campur */div/mod)
+        while (self.current_token and
+               self.current_token.type == TokenType.LOGICAL_OPERATOR and
+               self.current_token.value == 'dan'):
+            node.add_child(self.eat(TokenType.LOGICAL_OPERATOR, "dan"))
+            node.add_child(self.parse_and_factor())
+        
+        return node
+
+    def parse_and_factor(self):
+        """
+        <and-factor> ::= <factor> { ('*'|'/'|'bagi'|'mod') <factor> }
+        Level 5 (tertinggi): Multiplicative operators (*, /, bagi, mod)
+        """
+        node = ParseNode("<and-factor>")
         node.add_child(self.parse_factor())
         
         while (self.current_token and
-               ((self.current_token.type == TokenType.ARITHMETIC_OPERATOR and self.current_token.value in ['*', '/', 'bagi', 'mod']) or
-                (self.current_token.type == TokenType.LOGICAL_OPERATOR and self.current_token.value == 'dan'))):
-            
-            if self.current_token.value in ['*', '/']:
-                node.add_child(self.eat(TokenType.ARITHMETIC_OPERATOR, self.current_token.value))
-            elif self.current_token.value in ['bagi', 'mod']:
-                 node.add_child(self.eat(TokenType.ARITHMETIC_OPERATOR, self.current_token.value))
-            elif self.current_token.value == 'dan':
-                 node.add_child(self.eat(TokenType.LOGICAL_OPERATOR, "dan"))
-                 
+               self.current_token.type == TokenType.ARITHMETIC_OPERATOR and
+               self.current_token.value in ['*', '/', 'bagi', 'mod']):
+            node.add_child(self.eat(TokenType.ARITHMETIC_OPERATOR, self.current_token.value))
             node.add_child(self.parse_factor())
+        
         return node
+
 
     def parse_factor(self):
         node = ParseNode("<factor>")

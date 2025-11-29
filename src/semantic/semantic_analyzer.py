@@ -658,71 +658,77 @@ class SemanticAnalyzer:
             return ASTNode("InvalidExpression", data_type=BaseType.VOID)
 
     def visit_simple_expression(self, node: ParseNode) -> ASTNode:
+        """
+        Visit simple-expression - FIXED VERSION
+        Hanya handle 'atau', delegasikan +/- ke or-term
+        """
         children = [c for c in node.children if c.name != "<empty>"]
         if not children:
             return ASTNode("EmptySimpleExpr", data_type=BaseType.VOID)
         
-        # Visit term pertama
+        # Visit first or-term
         result = self.visit(children[0])
         
+        # Process 'atau' operators dari kiri ke kanan
         i = 1
         while i < len(children):
-            op_node = children[i]
-            term_node = children[i+1]
-            right = self.visit(term_node)
+            child_name = self.clean_name(children[i].name)
             
-            op = op_node.token.value if hasattr(op_node, 'token') and op_node.token else ""
+            # Skip jika bukan operator 'atau'
+            if not (hasattr(children[i], 'token') and 
+                    children[i].token and 
+                    children[i].token.value == 'atau'):
+                i += 1
+                continue
             
-            if op in ['+', '-']:
-                # Arithmetic: INTEGER atau REAL
-                new_type = self.arithmetic_type_promotion(result.data_type, right.data_type)
-                bin_node = BinaryExpressionNode("AdditiveExpression", 
-                                            data_type=new_type, operator=op)
-            elif op == 'atau':
-                # Logical: BOOLEAN
-                bin_node = BinaryExpressionNode("OrExpression", 
-                                            data_type=BaseType.BOOLEAN, operator="atau")
-            else:
-                bin_node = ASTNode("UnknownOp", data_type=BaseType.VOID)
+            # Process 'atau'
+            or_term_node = children[i + 1]
+            right = self.visit(or_term_node)
             
-            bin_node.add_child(result)
-            bin_node.add_child(right)
-            result = bin_node
+            or_node = BinaryExpressionNode("OrExpression", 
+                                        data_type=BaseType.BOOLEAN, 
+                                        operator="atau")
+            or_node.add_child(result)
+            or_node.add_child(right)
+            result = or_node
             i += 2
         
         return result
+
     def visit_term(self, node: ParseNode) -> ASTNode:
+        """
+        Visit term - FIXED VERSION
+        Hanya handle 'dan', delegasikan */ ke and-factor
+        """
         children = [c for c in node.children if c.name != "<empty>"]
         if not children:
             return ASTNode("EmptyTerm", data_type=BaseType.VOID)
         
-        # Visit factor pertama
+        # Visit first and-factor
         result = self.visit(children[0])
         
+        # Process 'dan' operators dari kiri ke kanan
         i = 1
         while i < len(children):
-            op_node = children[i]
-            factor_node = children[i+1]
-            right = self.visit(factor_node)
+            child_name = self.clean_name(children[i].name)
             
-            op = op_node.token.value if hasattr(op_node, 'token') and op_node.token else ""
+            # Skip jika bukan operator 'dan'
+            if not (hasattr(children[i], 'token') and 
+                    children[i].token and 
+                    children[i].token.value == 'dan'):
+                i += 1
+                continue
             
-            # ✅ FIX: Set type sesuai operator!
-            if op in ['*', '/', 'bagi', 'mod']:
-                # Arithmetic: INTEGER atau REAL
-                new_type = self.arithmetic_type_promotion(result.data_type, right.data_type)
-                bin_node = BinaryExpressionNode("MultiplicativeExpression", 
-                                            data_type=new_type, operator=op)
-            elif op == 'dan':
-                # Logical: BOOLEAN
-                bin_node = BinaryExpressionNode("AndExpression", 
-                                            data_type=BaseType.BOOLEAN, operator="dan")
-            else:
-                bin_node = ASTNode("UnknownOp", data_type=BaseType.VOID)
+            # Process 'dan'
+            and_factor_node = children[i + 1]
+            right = self.visit(and_factor_node)
             
-            bin_node.add_child(result)
-            bin_node.add_child(right)
-            result = bin_node
+            and_node = BinaryExpressionNode("AndExpression", 
+                                        data_type=BaseType.BOOLEAN, 
+                                        operator="dan")
+            and_node.add_child(result)
+            and_node.add_child(right)
+            result = and_node
             i += 2
         
         return result
@@ -1186,3 +1192,64 @@ class SemanticAnalyzer:
                     ast_node.add_child(param_expr)
         
         return ast_node
+    def visit_or_term(self, node: ParseNode) -> ASTNode:
+        """
+        Visit or-term - handle additive operators (+, -)
+        Level precedence: di atas term, di bawah simple-expression
+        """
+        children = [c for c in node.children if c.name != "<empty>"]
+        if not children:
+            return ASTNode("EmptyOrTerm", data_type=BaseType.VOID)
+        
+        # Visit first term
+        result = self.visit(children[0])
+        
+        # Process +/- operators dari kiri ke kanan
+        i = 1
+        while i < len(children):
+            op_node = children[i]
+            term_node = children[i + 1]
+            right = self.visit(term_node)
+            
+            op = op_node.token.value if hasattr(op_node, 'token') and op_node.token else ""
+            
+            # Type promotion untuk aritmatika
+            new_type = self.arithmetic_type_promotion(result.data_type, right.data_type)
+            
+            bin_node = BinaryExpressionNode("AdditiveExpression", 
+                                        data_type=new_type, operator=op)
+            bin_node.add_child(result)
+            bin_node.add_child(right)
+            result = bin_node
+            i += 2
+        
+        return result
+
+    def visit_and_factor(self, node: ParseNode) -> ASTNode:
+        """
+        Visit and-factor - handle multiplicative operators (*, /, bagi, mod)
+        Level precedence: tertinggi (di bawah factor)
+        """
+        children = [c for c in node.children if c.name != "<empty>"]
+        if not children:
+            return ASTNode("EmptyAndFactor", data_type=BaseType.VOID)
+        
+        result = self.visit(children[0])
+        
+        i = 1
+        while i < len(children):
+            op_node = children[i]
+            factor_node = children[i + 1]
+            right = self.visit(factor_node)
+            
+            op = op_node.token.value if hasattr(op_node, 'token') and op_node.token else ""
+            new_type = self.arithmetic_type_promotion(result.data_type, right.data_type)
+            
+            bin_node = BinaryExpressionNode("MultiplicativeExpression", 
+                                        data_type=new_type, operator=op)
+            bin_node.add_child(result)
+            bin_node.add_child(right)
+            result = bin_node
+            i += 2
+        
+        return result
