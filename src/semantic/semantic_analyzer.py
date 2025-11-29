@@ -49,7 +49,11 @@ class SemanticAnalyzer:
         Otomatis menormalisasi nama node (contoh: <program-header> -> visit_program_header)
         """
         clean_node_name = self.clean_name(node.name).replace("-", "_")
-        method_name = f'visit_{clean_node_name}'
+
+        if clean_node_name == "procedure/function_call":
+            method_name = "visit_procedure_call"
+        else:
+            method_name = f'visit_{clean_node_name}'
 
         method = getattr(self, method_name, self.visit_default)
         
@@ -614,6 +618,11 @@ class SemanticAnalyzer:
         value_node = self.visit(expr_child)
         print(f"  → Expression result: {type(value_node).__name__}")
 
+        if (hasattr(target_node, 'data_type') and target_node.data_type != BaseType.VOID and 
+            value_node.data_type != BaseType.VOID):
+            if not self.is_type_compatible(target_node.data_type, value_node.data_type):
+                self.error(f"Type mismatch: cannot assign {value_node.data_type.name} to {target_node.data_type.name}")
+
         # --- Create Assignment Node ---
         assign_node = AssignmentNode("Assignment", data_type=BaseType.VOID)
         assign_node.add_child(target_node)
@@ -772,7 +781,7 @@ class SemanticAnalyzer:
         
         # Attempt to find procedure name from children
         for child in node.children:
-            if child.name == "IDENTIFIER" and child.token:
+            if child.name.startswith("IDENTIFIER") and child.token:
                 proc_name = child.token.value
                 break
             elif child.name.startswith("KEYWORD") and child.token:
