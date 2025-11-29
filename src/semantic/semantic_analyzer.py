@@ -84,38 +84,39 @@ class SemanticAnalyzer:
         """Visit program - VERSI YANG BENAR (FIXED 100%)"""
         program_name = "Unknown"
         
-        # Ambil nama program dari header
         if node.children and node.children[0].name == "<program-header>":
             header_children = node.children[0].children
             if len(header_children) > 1 and header_children[1].token:
                 program_name = header_children[1].token.value
         
-        # Masukkan nama program ke symbol table (level 0)
+        # 1. Masukkan nama program ke symbol table (Level 0, Block 0)
         program_idx = self.symbol_table.enter_identifier(
             program_name, ObjType.PROGRAM, BaseType.VOID.value
         )
         
-        # PENTING: LANGSUNG BUAT BLOCK UTAMA PROGRAM SETELAH HEADER!
-        main_block_idx = self.symbol_table.enter_block()  # ← INI HARUS DI ATAS DECLARATION!!
+        # 2. PENTING: BUAT BLOCK UTAMA PROGRAM (Block 1, Level 1)
+        main_block_idx = self.symbol_table.enter_block() 
         
         ast_node = ProgramNode("Program", name=program_name, 
                             token=node.children[0].children[1].token if node.children else None,
                             data_type=BaseType.VOID, tab_index=program_idx)
         
-        # Sekarang proses declaration-part (variabel akan masuk ke block 1)
         for child in node.children:
             if child.name == "<declaration-part>":
+                # 3. Proses deklarasi. Variabel sekarang akan masuk ke Block 1.
                 decl_ast = self.visit(child)
                 ast_node.add_child(decl_ast)
             elif child.name == "<compound-statement>":
+                # 4. Proses statement body.
                 compound_ast = self.visit(child)
                 compound_ast.block_index = main_block_idx
                 ast_node.add_child(compound_ast)
         
-        # Keluar dari block utama
+        # 5. Keluar dari block utama
         self.symbol_table.leave_block()
         
         return ast_node
+    
     def visit_declaration_part(self, node: ParseNode) -> ASTNode:
         """Visit declaration part - support const, type, var, subprograms"""
         ast_node = ASTNode("Declarations")
@@ -230,17 +231,19 @@ class SemanticAnalyzer:
             if child.name.startswith("KEYWORD"):
                 continue
                 
-            # Process setiap <var-item>
+            # Proses setiap <var-item>
             if child.name == "<var-item>":
                 var_item_ast = self.visit(child)
                 
-                # Extract VarDecl nodes dari var_item
+                # Extract VarDecl nodes
                 for var_decl in var_item_ast.children:
                     if isinstance(var_decl, VarDeclNode):
-                        var_decl.block_index = 0
+                        # PENTING: Perbaiki block index agar sesuai dengan level saat ini (self.symbol_table.level)
+                        var_decl.block_index = self.symbol_table.level 
                         ast_node.add_child(var_decl)
         
         return ast_node
+    
     def visit_var_item(self, node: ParseNode) -> ASTNode:
         identifiers = []
         type_ast = None
@@ -468,9 +471,6 @@ class SemanticAnalyzer:
         current_block = self.symbol_table.display[-1] if self.symbol_table.display else 0
         ast_node = ASTNode("CompoundStatement", block_index=current_block)
         
-        print(f"\n=== DEBUG visit_compound_statement ===")
-        print(f"Node children count: {len(node.children)}")
-        
         for i, child in enumerate(node.children):
             name = self.clean_name(child.name)
             print(f"Child {i}: {child.name} (cleaned: {name})")
@@ -486,9 +486,6 @@ class SemanticAnalyzer:
     def visit_statement_list(self, node: ParseNode) -> ASTNode:
         """Visit statement list - WITH DEBUG"""
         ast_node = ASTNode("StatementList")
-        
-        print(f"\n=== DEBUG visit_statement_list ===")
-        print(f"Node children count: {len(node.children)}")
         
         for i, child in enumerate(node.children):
             child_name = self.clean_name(child.name)
@@ -580,9 +577,6 @@ class SemanticAnalyzer:
         
     #     return assign_node
     def visit_assignment_statement(self, node: ParseNode) -> ASTNode:
-        print(f"\n=== DEBUG visit_assignment_statement ===")
-        print(f"Node: {node.name}, children count: {len(node.children)}")
-        
         if len(node.children) < 3:
             print("  → ERROR: Not enough children!")
             return AssignmentNode("Assignment", data_type=BaseType.VOID)

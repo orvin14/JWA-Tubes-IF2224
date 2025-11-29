@@ -58,7 +58,8 @@ def print_decorated_ast(node: ASTNode, level: int = 0, prefix: str = "", is_last
             op = op_map.get(value.operator, value.operator)
             l = f"'{value.children[0].identifier}'" if hasattr(value.children[0], 'identifier') else str(value.children[0])
             r = str(value.children[1])
-            val_str = f"({l} {op} {r}) → type:boolean"
+            expr_type = value.data_type.name.lower() if value.data_type else 'unknown'
+            val_str = f"({l} {op} {r}) → type:{expr_type}"
         else:
             val_str = str(value)
 

@@ -44,8 +44,8 @@ class SymbolTable:
         
         self.next_adr: int = 0
     
-        self.user_id_start = 29
-        self.next_user_id = 29
+        self.user_id_start = 31
+        self.next_user_id = 31
         
         self.const_values: Dict[str, Any] = {}
         
