@@ -1,7 +1,6 @@
 import sys
 import os
 
-
 from lexical_analyzer import Lexer
 from parser import Parser
 
@@ -21,7 +20,7 @@ def main():
     root_dir = os.path.dirname(script_dir)                  
 
 
-    input_file_path = os.path.join(root_dir, 'test', 'milestone-2', pascal_filename)
+    input_file_path = os.path.join(root_dir, 'test', 'milestone-3', pascal_filename)
     rules_file_path = os.path.join(script_dir, 'lexical_rules.json')
 
 

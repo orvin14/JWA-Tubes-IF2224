@@ -5,11 +5,6 @@ from .symbol_table import SymbolTable, ObjType, BaseType
 from .ast_nodes import *
 
 class SemanticAnalyzer:
-    """
-    Semantic Analyzer untuk Pascal-S Compiler
-    Melakukan type checking, scope checking, dan membangun decorated AST
-    """
-    
     def __init__(self):
         self.symbol_table = SymbolTable()
         self.current_ast: Optional[ASTNode] = None
@@ -32,7 +27,6 @@ class SemanticAnalyzer:
         return self.current_ast
 
     def error(self, message: str, token: Token = None):
-        """Record semantic error"""
         if token:
             location = f" at line {token.line}, column {token.column}"
         else:
@@ -40,14 +34,9 @@ class SemanticAnalyzer:
         self.errors.append(f"Semantic Error{location}: {message}")
     
     def clean_name(self, name: str) -> str:
-        """Helper untuk membersihkan nama node dari < > dan spasi"""
         return name.replace("<", "").replace(">", "").strip()
 
     def visit(self, node: ParseNode) -> ASTNode:
-        """
-        Visitor pattern - dispatch ke method yang sesuai.
-        Otomatis menormalisasi nama node (contoh: <program-header> -> visit_program_header)
-        """
         clean_node_name = self.clean_name(node.name).replace("-", "_")
 
         if clean_node_name == "procedure/function_call":
@@ -85,7 +74,6 @@ class SemanticAnalyzer:
     
         
     def visit_program(self, node: ParseNode) -> ASTNode:
-        """Visit program - VERSI YANG BENAR (FIXED 100%)"""
         program_name = "Unknown"
         
         if node.children and node.children[0].name == "<program-header>":
@@ -93,12 +81,10 @@ class SemanticAnalyzer:
             if len(header_children) > 1 and header_children[1].token:
                 program_name = header_children[1].token.value
         
-        # 1. Masukkan nama program ke symbol table (Level 0, Block 0)
         program_idx = self.symbol_table.enter_identifier(
             program_name, ObjType.PROGRAM, BaseType.VOID.value
         )
         
-        # 2. PENTING: BUAT BLOCK UTAMA PROGRAM (Block 1, Level 1)
         main_block_idx = self.symbol_table.enter_block() 
         
         ast_node = ProgramNode("Program", name=program_name, 
@@ -107,22 +93,18 @@ class SemanticAnalyzer:
         
         for child in node.children:
             if child.name == "<declaration-part>":
-                # 3. Proses deklarasi. Variabel sekarang akan masuk ke Block 1.
                 decl_ast = self.visit(child)
                 ast_node.add_child(decl_ast)
             elif child.name == "<compound-statement>":
-                # 4. Proses statement body.
                 compound_ast = self.visit(child)
                 compound_ast.block_index = main_block_idx
                 ast_node.add_child(compound_ast)
         
-        # 5. Keluar dari block utama
         self.symbol_table.leave_block()
         
         return ast_node
     
     def visit_declaration_part(self, node: ParseNode) -> ASTNode:
-        """Visit declaration part - support const, type, var, subprograms"""
         ast_node = ASTNode("Declarations")
         
         for child in node.children:
@@ -152,7 +134,6 @@ class SemanticAnalyzer:
         
         return ast_node
     def visit_block(self, node: ParseNode) -> ASTNode:
-        """Visit block - handle declarations dan compound statement"""
         ast_node = ASTNode("Block", block_index=self.symbol_table.display[-1])
         
         for child in node.children:
@@ -165,7 +146,6 @@ class SemanticAnalyzer:
         
         return ast_node
     def visit_variable(self, node: ParseNode) -> ASTNode:
-        """Visit variable (including array access)"""
         if (len(node.children) >= 4 and
             node.children[0].name == "IDENTIFIER" and
             node.children[1].name == "LBRACKET"):
@@ -235,14 +215,13 @@ class SemanticAnalyzer:
             if child.name.startswith("KEYWORD"):
                 continue
                 
-            # Proses setiap <var-item>
             if child.name == "<var-item>":
                 var_item_ast = self.visit(child)
                 
                 # Extract VarDecl nodes
                 for var_decl in var_item_ast.children:
                     if isinstance(var_decl, VarDeclNode):
-                        # PENTING: Perbaiki block index agar sesuai dengan level saat ini (self.symbol_table.level)
+
                         var_decl.block_index = self.symbol_table.level 
                         ast_node.add_child(var_decl)
         
@@ -256,7 +235,6 @@ class SemanticAnalyzer:
         for child in node.children:
             if child.name == "<identifier-list>":
                 identifiers = self.extract_identifiers(child)
-                # Ambil token dari identifier pertama
                 for id_child in child.children:
                     if id_child.name == "IDENTIFIER" and id_child.token:
                         token_ref = id_child.token
@@ -270,7 +248,6 @@ class SemanticAnalyzer:
         var_item_node = ASTNode("VarItem")
         base_type = type_ast.data_type
         
-        # KUNCI: Register setiap identifier ke symbol table
         for identifier in identifiers:
             # Check duplicate
             existing_idx = self.symbol_table.find_identifier(identifier)
@@ -280,12 +257,11 @@ class SemanticAnalyzer:
                     self.error(f"Duplicate identifier '{identifier}'", token_ref)
                     continue
             
-            # REGISTER KE SYMBOL TABLE!
             var_idx = self.symbol_table.enter_identifier(
                 identifier, ObjType.VARIABLE, base_type.value, size=1
             )
             
-            # Buat VarDecl node
+            # Make VarDeclNode
             var_decl = VarDeclNode(
                 "Variable",
                 identifier=identifier,
@@ -299,7 +275,6 @@ class SemanticAnalyzer:
         return var_item_node
 
     def visit_type(self, node: ParseNode) -> ASTNode:
-        """Visit type specification"""
         if not node.children:
             return ASTNode("Type", data_type=BaseType.VOID)
             
@@ -327,7 +302,6 @@ class SemanticAnalyzer:
     
 
     def visit_array_type(self, node: ParseNode) -> ASTNode:
-        """Visit array type - FIXED to save array_ref"""
         index_spec = None
         element_type_node = None
         low_bound = 1
@@ -340,7 +314,7 @@ class SemanticAnalyzer:
                 range_result = self.parse_range(index_spec)
                 if range_result:
                     low_bound, high_bound = range_result
-            elif child.name == "<range>":  # Bisa langsung <range> juga
+            elif child.name == "<range>":
                 range_result = self.parse_range(child)
                 if range_result:
                     low_bound, high_bound = range_result
@@ -348,12 +322,11 @@ class SemanticAnalyzer:
                 element_type_node = self.visit(child)
         
         if element_type_node:
-            # Cek invalid bounds
             if low_bound > high_bound:
                 self.error(f"Invalid array bounds: {low_bound}..{high_bound}", 
                         node.children[0].token if node.children else None)
             
-            # Buat array table entry
+            # Make array entry in atab
             array_idx = self.symbol_table.enter_array(
                 BaseType.INTEGER.value,  # index type
                 element_type_node.data_type.value,  # element type
@@ -362,14 +335,12 @@ class SemanticAnalyzer:
                 1  # element size
             )
             
-            # KUNCI: Simpan array_ref di node!
             array_node = ASTNode("ArrayType", data_type=BaseType.ARRAY, tab_index=array_idx)
-            array_node.array_ref = array_idx  # ← INI PENTING!
+            array_node.array_ref = array_idx
             return array_node
         
         return ASTNode("ArrayType", data_type=BaseType.ARRAY)
     def visit_const_declaration(self, node: ParseNode) -> ASTNode:
-        """Visit constant declaration"""
         ast_node = ASTNode("ConstDeclaration")
         
         for child in node.children:
@@ -382,7 +353,6 @@ class SemanticAnalyzer:
         return ast_node
 
     def visit_const_item(self, node: ParseNode) -> ASTNode:
-        """Visit const item - FIXED VERSION"""
         identifier = None
         value_node = None
         const_value = None
@@ -399,7 +369,6 @@ class SemanticAnalyzer:
                 
     
                 if isinstance(const_value, str):
-                    # Ini mungkin identifier constant
                     ref_idx = self.symbol_table.find_identifier(const_value)
                     if ref_idx is not None:
                         ref_entry = self.symbol_table.tab[ref_idx]
@@ -423,13 +392,12 @@ class SemanticAnalyzer:
             const_node = ASTNode("ConstItem", 
                             token=node.children[0].token if node.children else None,
                             data_type=const_type, tab_index=const_idx)
-            const_node.identifier = identifier  # ← Tambahkan ini
+            const_node.identifier = identifier
             const_node.add_child(value_node)
             return const_node
         
         return ASTNode("ConstItem")
     def visit_const_value(self, node: ParseNode) -> ASTNode:
-        """Visit constant value"""
         if node.children:
             child = node.children[0]
             
@@ -467,11 +435,8 @@ class SemanticAnalyzer:
                     return ast_node
         
         return ASTNode("ConstValue", data_type=BaseType.VOID)
-    
-    # ========== Statements ==========
         
     def visit_compound_statement(self, node: ParseNode) -> ASTNode:
-        """Visit compound statement (mulai...selesai)"""
         current_block = self.symbol_table.display[-1] if self.symbol_table.display else 0
         ast_node = ASTNode("CompoundStatement", block_index=current_block)
         
@@ -488,7 +453,6 @@ class SemanticAnalyzer:
         
         return ast_node
     def visit_statement_list(self, node: ParseNode) -> ASTNode:
-        """Visit statement list - WITH DEBUG"""
         ast_node = ASTNode("StatementList")
         
         for i, child in enumerate(node.children):
@@ -592,7 +556,7 @@ class SemanticAnalyzer:
         assign_child = node.children[1]
         expr_child   = node.children[2]
 
-        # --- TARGET: IDENTIFIER ---
+        # Target Identifier
         if target_child.name.startswith("IDENTIFIER") and target_child.token:
             var_name = target_child.token.value
             print(f"  → Target variable: {var_name}")
@@ -613,7 +577,7 @@ class SemanticAnalyzer:
             print(f"  → ERROR: Target is not IDENTIFIER!")
             target_node = ASTNode("UnknownTarget")
 
-        # --- VALUE: Expression ---
+        # Value Expression
         print(f"  → Visiting expression...")
         value_node = self.visit(expr_child)
         print(f"  → Expression result: {type(value_node).__name__}")
@@ -623,7 +587,6 @@ class SemanticAnalyzer:
             if not self.is_type_compatible(target_node.data_type, value_node.data_type):
                 self.error(f"Type mismatch: cannot assign {value_node.data_type.name} to {target_node.data_type.name}")
 
-        # --- Create Assignment Node ---
         assign_node = AssignmentNode("Assignment", data_type=BaseType.VOID)
         assign_node.add_child(target_node)
         assign_node.add_child(value_node)
@@ -634,14 +597,10 @@ class SemanticAnalyzer:
         print(f"  → Created AssignmentNode with {len(assign_node.children)} children")
         return assign_node
     def visit_expression(self, node: ParseNode) -> ASTNode:
-        """Visit expression - FIXED VERSION"""
-        
         if len(node.children) == 1:
-            # ✅ Langsung return hasil dari simple-expression
             return self.visit_simple_expression(node.children[0])
         
         elif len(node.children) >= 3:
-            # Binary relational expression (a > b, dll)
             left = self.visit_simple_expression(node.children[0])
             op_node = node.children[1]
             right = self.visit_simple_expression(node.children[2])
@@ -652,16 +611,12 @@ class SemanticAnalyzer:
                                         data_type=BaseType.BOOLEAN, operator=op)
             bin_node.add_child(left)
             bin_node.add_child(right)
-            return bin_node  # ✅ Harus return node ini!
+            return bin_node
         
         else:
             return ASTNode("InvalidExpression", data_type=BaseType.VOID)
 
     def visit_simple_expression(self, node: ParseNode) -> ASTNode:
-        """
-        Visit simple-expression - FIXED VERSION
-        Hanya handle 'atau', delegasikan +/- ke or-term
-        """
         children = [c for c in node.children if c.name != "<empty>"]
         if not children:
             return ASTNode("EmptySimpleExpr", data_type=BaseType.VOID)
@@ -669,12 +624,11 @@ class SemanticAnalyzer:
         # Visit first or-term
         result = self.visit(children[0])
         
-        # Process 'atau' operators dari kiri ke kanan
+        # Process 'atau' from left to right
         i = 1
         while i < len(children):
             child_name = self.clean_name(children[i].name)
-            
-            # Skip jika bukan operator 'atau'
+ 
             if not (hasattr(children[i], 'token') and 
                     children[i].token and 
                     children[i].token.value == 'atau'):
@@ -696,10 +650,6 @@ class SemanticAnalyzer:
         return result
 
     def visit_term(self, node: ParseNode) -> ASTNode:
-        """
-        Visit term - FIXED VERSION
-        Hanya handle 'dan', delegasikan */ ke and-factor
-        """
         children = [c for c in node.children if c.name != "<empty>"]
         if not children:
             return ASTNode("EmptyTerm", data_type=BaseType.VOID)
@@ -707,12 +657,9 @@ class SemanticAnalyzer:
         # Visit first and-factor
         result = self.visit(children[0])
         
-        # Process 'dan' operators dari kiri ke kanan
         i = 1
         while i < len(children):
             child_name = self.clean_name(children[i].name)
-            
-            # Skip jika bukan operator 'dan'
             if not (hasattr(children[i], 'token') and 
                     children[i].token and 
                     children[i].token.value == 'dan'):
@@ -732,16 +679,14 @@ class SemanticAnalyzer:
             i += 2
         
         return result
+    
     def arithmetic_type_promotion(self, left_type: BaseType, right_type: BaseType) -> BaseType:
-        """Type promotion untuk operasi aritmatika"""
         if left_type == BaseType.REAL or right_type == BaseType.REAL:
             return BaseType.REAL
         elif left_type == BaseType.INTEGER and right_type == BaseType.INTEGER:
             return BaseType.INTEGER
         else:
             return BaseType.VOID
-
-
 
     def visit_factor(self, node: ParseNode) -> ASTNode:
         first_child = node.children[0]
@@ -782,7 +727,6 @@ class SemanticAnalyzer:
         else:
             return ASTNode("UnknownFactor", data_type=BaseType.VOID)
     def visit_procedure_call(self, node: ParseNode) -> ASTNode:
-        """Visit procedure call"""
         proc_name = ""
         
         # Attempt to find procedure name from children
@@ -818,9 +762,7 @@ class SemanticAnalyzer:
                 ast_node.add_child(self.visit(child))
         return ast_node
 
-    # ========== Helper Methods ==========
     def extract_identifiers(self, node: ParseNode) -> List[str]:
-        """Extract identifiers dari identifier-list node - FIXED"""
         identifiers = []
         # print(f"DEBUG extract_identifiers: node.name={node.name}, children count={len(node.children)}")
         
@@ -831,7 +773,6 @@ class SemanticAnalyzer:
                 identifiers.append(child.token.value)
                 # print(f"    -> Found identifier: {child.token.value}")
             
-            # (untuk handle kasus parser yang bikin name jadi "IDENTIFIER('value')")
             elif child.name.startswith("IDENTIFIER") and child.token:
                 identifiers.append(child.token.value)
                 # print(f"    -> Found identifier via name: {child.token.value}")
@@ -844,7 +785,6 @@ class SemanticAnalyzer:
 
     
     def get_operator_value(self, node: ParseNode) -> str:
-        """Safely extract operator value from a node"""
         if node.token:
             return node.token.value
         if node.children and node.children[0].token:
@@ -887,11 +827,8 @@ class SemanticAnalyzer:
         return BaseType.VOID
     
     def parse_range(self, node: ParseNode) -> Optional[Tuple[int, int]]:
-        """Parse range specification untuk array"""
-        # Node bisa berupa <range> atau langsung child-childnya
         target_node = node
         
-        # Jika node ini adalah wrapper (misal index-specification), cari child <range>
         for child in node.children:
             if self.clean_name(child.name) == "range":
                 target_node = child
@@ -906,7 +843,6 @@ class SemanticAnalyzer:
         return None
         
     def _collect_numbers(self, node: ParseNode, numbers: List[int]):
-        """Helper rekursif untuk mencari angka dalam range"""
         if node.name == "NUMBER" and node.token:
             try:
                 numbers.append(int(node.token.value))
@@ -916,14 +852,13 @@ class SemanticAnalyzer:
             self._collect_numbers(child, numbers)
     
     def evaluate_constant_expression(self, node: ParseNode) -> Optional[int]:
-        """Evaluate constant expression untuk array bounds"""
         vals = []
         self._collect_numbers(node, vals)
         if vals:
             return vals[0]
         return None
+    
     def visit_if_statement(self, node: ParseNode) -> ASTNode:
-        """Visit if-then-else statement"""
         condition_node = None
         then_node = None
         else_node = None
@@ -938,7 +873,7 @@ class SemanticAnalyzer:
                 else:
                     else_node = self.visit(child)
         
-        # Type check: condition harus boolean
+        # Type check: condition must boolean
         if condition_node and condition_node.data_type != BaseType.BOOLEAN:
             self.error(f"If condition must be boolean, got {condition_node.data_type.name}")
         
@@ -964,7 +899,7 @@ class SemanticAnalyzer:
             elif name == "statement" or name == "compound-statement":
                 body_node = self.visit(child)
         
-        # Type check: condition harus boolean
+        # Type check: condition must boolean
         if condition_node and condition_node.data_type != BaseType.BOOLEAN:
             self.error(f"While condition must be boolean, got {condition_node.data_type.name}")
         
@@ -977,8 +912,6 @@ class SemanticAnalyzer:
         return ast_node
 
     def visit_for_statement(self, node: ParseNode) -> ASTNode:
-
-
         control_var = None
         start_expr = None
         end_expr = None
@@ -1015,12 +948,11 @@ class SemanticAnalyzer:
         if control_var and control_var.data_type not in [BaseType.INTEGER, BaseType.CHAR]:
             self.error("For loop control variable must be integer or char")
 
-        # INI YANG HARUS DIPERBAIKI: TAMBAHKAN control_var KE CHILD!
         for_node = ForStatementNode("ForStatement", data_type=BaseType.VOID)
         for_node.is_downto = is_downto
         
         if control_var: 
-            for_node.add_child(control_var)   # INI YANG LUPA!
+            for_node.add_child(control_var)
         if start_expr: 
             for_node.add_child(start_expr)
         if end_expr:   
@@ -1030,7 +962,6 @@ class SemanticAnalyzer:
         
         return for_node
     def visit_repeat_statement(self, node: ParseNode) -> ASTNode:
-        """Visit repeat-until statement"""
         body_nodes = []
         condition_node = None
         
@@ -1043,7 +974,7 @@ class SemanticAnalyzer:
             elif name == "expression":
                 condition_node = self.visit(child)
         
-        # Type check: condition harus boolean
+        # Type check: condition must boolean
         if condition_node and condition_node.data_type != BaseType.BOOLEAN:
             self.error(f"Repeat-until condition must be boolean")
         
@@ -1055,13 +986,11 @@ class SemanticAnalyzer:
         
         return ast_node
     def visit_subprogram_declaration(self, node: ParseNode) -> ASTNode:
-        """Visit subprogram declaration wrapper"""
         if node.children:
             return self.visit(node.children[0])
         return ASTNode("SubprogramDeclaration")
 
     def visit_procedure_declaration(self, node: ParseNode) -> ASTNode:
-        """Visit procedure declaration"""
         proc_name = ""
         
         for child in node.children:
@@ -1076,7 +1005,7 @@ class SemanticAnalyzer:
         if self.check_duplicate_identifier(proc_name):
             return ASTNode("ProcedureDeclaration")
         
-        # Enter procedure ke symbol table
+        # Enter procedure to symbol table
         proc_idx = self.symbol_table.enter_identifier(
             proc_name, ObjType.PROCEDURE, BaseType.VOID.value
         )
@@ -1112,7 +1041,6 @@ class SemanticAnalyzer:
         return proc_node
 
     def visit_function_declaration(self, node: ParseNode) -> ASTNode:
-        """Visit function declaration"""
         func_name = ""
         return_type = BaseType.VOID
         
@@ -1160,7 +1088,6 @@ class SemanticAnalyzer:
         return func_node
 
     def visit_function_call(self, node: ParseNode) -> ASTNode:
-        """Visit function call"""
         func_name = ""
         
         for child in node.children:
@@ -1193,10 +1120,6 @@ class SemanticAnalyzer:
         
         return ast_node
     def visit_or_term(self, node: ParseNode) -> ASTNode:
-        """
-        Visit or-term - handle additive operators (+, -)
-        Level precedence: di atas term, di bawah simple-expression
-        """
         children = [c for c in node.children if c.name != "<empty>"]
         if not children:
             return ASTNode("EmptyOrTerm", data_type=BaseType.VOID)
@@ -1204,7 +1127,7 @@ class SemanticAnalyzer:
         # Visit first term
         result = self.visit(children[0])
         
-        # Process +/- operators dari kiri ke kanan
+        # Process +/- operators from left to right
         i = 1
         while i < len(children):
             op_node = children[i]
@@ -1213,7 +1136,6 @@ class SemanticAnalyzer:
             
             op = op_node.token.value if hasattr(op_node, 'token') and op_node.token else ""
             
-            # Type promotion untuk aritmatika
             new_type = self.arithmetic_type_promotion(result.data_type, right.data_type)
             
             bin_node = BinaryExpressionNode("AdditiveExpression", 
@@ -1226,10 +1148,6 @@ class SemanticAnalyzer:
         return result
 
     def visit_and_factor(self, node: ParseNode) -> ASTNode:
-        """
-        Visit and-factor - handle multiplicative operators (*, /, bagi, mod)
-        Level precedence: tertinggi (di bawah factor)
-        """
         children = [c for c in node.children if c.name != "<empty>"]
         if not children:
             return ASTNode("EmptyAndFactor", data_type=BaseType.VOID)

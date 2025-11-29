@@ -2,7 +2,6 @@ from typing import List, Dict, Any, Optional
 from enum import Enum, auto
 
 class ObjType(Enum):
-    """Jenis object dalam symbol table"""
     CONSTANT = auto()
     VARIABLE = auto()
     TYPE = auto()
@@ -11,7 +10,6 @@ class ObjType(Enum):
     PROGRAM = auto()
 
 class BaseType(Enum):
-    """Tipe data dasar Pascal-S"""
     INTEGER = 1
     REAL = 2
     BOOLEAN = 3
@@ -23,11 +21,6 @@ class BaseType(Enum):
     RANGE = 9
 
 class SymbolTable:
-    """
-    Symbol Table untuk Pascal-S Compiler
-    Implementasi sesuai spesifikasi dengan 3 tabel: tab, btab, atab
-    """
-    
     def __init__(self):
         self.tab: List[Optional[Dict[str, Any]]] = []
 
@@ -50,7 +43,6 @@ class SymbolTable:
         self.const_values: Dict[str, Any] = {}
         
     def _init_reserved_words(self):
-        """Initialize reserved words dan built-in types (indices 0-28)"""
         reserved_types = [
             ("integer", BaseType.INTEGER),
             ("real", BaseType.REAL), 
@@ -110,10 +102,6 @@ class SymbolTable:
             })
     
     def enter_block(self) -> int:
-        """
-        Memasuki block baru (procedure, function, atau compound statement)
-        Returns: index dari block yang baru dibuat
-        """
         self.level += 1
         block_index = len(self.btab)
         
@@ -128,7 +116,6 @@ class SymbolTable:
         return block_index
     
     def leave_block(self):
-        """Keluar dari block saat ini"""
         if self.level > 0:
             self.level -= 1
             self.display.pop()
@@ -136,10 +123,6 @@ class SymbolTable:
     def enter_identifier(self, name: str, obj_type: ObjType, data_type: int, 
                         ref: int = 0, nrm: int = 1, size: int = 1, 
                         const_value: Any = None) -> int:
-        """
-        Memasukkan identifier baru ke symbol table
-        Returns: index dari identifier yang baru dimasukkan
-        """
         tab_index = self.next_user_id
         self.next_user_id += 1
         
@@ -199,16 +182,11 @@ class SymbolTable:
                         
         return None
     def get_constant_value(self, name: str) -> Optional[Any]:
-        """Mengambil nilai konstanta"""
         return self.const_values.get(name)
     
     def enter_array(self, index_type: int, element_type: int, 
                    low_bound: int, high_bound: int, 
                    element_size: int = 1) -> int:
-        """
-        Memasukkan array type ke array table
-        Returns: index di atab
-        """
         array_size = (high_bound - low_bound + 1) * element_size
         
         atab_index = len(self.atab)

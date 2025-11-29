@@ -2,9 +2,6 @@ from .ast_nodes import *
 from .semantic_analyzer import SemanticAnalyzer
 
 def format_expression(node: ASTNode) -> str:
-    """
-    Recursive function to format expressions with proper parentheses
-    """
     if isinstance(node, NumberNode):
         return str(node.value)
     
@@ -170,9 +167,6 @@ def print_decorated_ast(node: ASTNode, level: int = 0, prefix: str = "", is_last
 
 
 def print_symbol_tables(analyzer: SemanticAnalyzer):
-    """
-    Print symbol tables (tab, btab, atab)
-    """
     print("\n=== SYMBOL TABLES ===")
     
     print("\nIdentifier Table (tab):")

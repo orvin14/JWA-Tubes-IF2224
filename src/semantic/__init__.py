@@ -1,8 +1,3 @@
-"""
-Semantic Analysis Module for Pascal-S Compiler
-Milestone 3 - IF2224 TBFO
-"""
-
 from .ast_nodes import *
 from .symbol_table import SymbolTable, ObjType, BaseType
 from .semantic_analyzer import SemanticAnalyzer

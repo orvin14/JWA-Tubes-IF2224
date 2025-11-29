@@ -9,7 +9,6 @@ if TYPE_CHECKING:
 
 @dataclass
 class ASTNode:
-    """Base class untuk semua AST nodes"""
     node_type: str
     children: List[ASTNode] = field(default_factory=list)
     token: Optional[Token] = None
@@ -26,7 +25,6 @@ class ASTNode:
 
 @dataclass
 class ProgramNode(ASTNode):
-    """Node untuk program utama"""
     name: str = ""
     
     def __init__(self, node_type: str, name: str = "", **kwargs):
@@ -38,7 +36,6 @@ class ProgramNode(ASTNode):
 
 @dataclass
 class VarDeclNode(ASTNode):
-    """Node untuk deklarasi variabel"""
     identifier: str = ""
     
     def __init__(self, node_type: str, identifier: str = "", **kwargs):
@@ -50,8 +47,6 @@ class VarDeclNode(ASTNode):
 
 @dataclass
 class AssignmentNode(ASTNode):
-    """Node untuk assignment statement"""
-    
     def __repr__(self):
         if len(self.children) >= 2:
             target = self.children[0]
@@ -90,7 +85,7 @@ class BinaryExpressionNode(ASTNode):
             left = self.children[0]
             right = self.children[1]
             
-            # TRANSLATE KODE OPERATOR KE SIMBOL ASLI
+            # Translate operator to pretty format
             op_map = {
                 'GT': '>', 'LT': '<', 'GE': '>=', 'LE': '<=', 
                 'EQ': '=', 'NE': '<>', 'AND': ' dan ', 'OR': ' atau ',
@@ -100,7 +95,6 @@ class BinaryExpressionNode(ASTNode):
             }
             pretty_op = op_map.get(self.operator, self.operator)
             
-            # --- FUNGSI BANTU UNTUK FORMAT REKURSIF DENGAN KURUNG ---
             def format_operand(operand):
                 if isinstance(operand, VariableNode):
                     return f"'{operand.identifier}'"
@@ -113,7 +107,7 @@ class BinaryExpressionNode(ASTNode):
             left_str = format_operand(left)
             right_str = format_operand(right)
             
-            # Atur spasi: tidak ada spasi untuk operator aritmatika sederhana
+            # Space around certain operators
             if pretty_op in ['+', '-', '*', '/']:
                  return f"{left_str}{pretty_op}{right_str}"
             else:
@@ -123,7 +117,6 @@ class BinaryExpressionNode(ASTNode):
 
 @dataclass
 class VariableNode(ASTNode):
-    """Node untuk variable reference"""
     identifier: str = ""
     is_array_element: bool = False
     
@@ -136,7 +129,6 @@ class VariableNode(ASTNode):
 
 @dataclass
 class NumberNode(ASTNode):
-    """Node untuk number literal"""
     value: float = 0
     
     def __init__(self, node_type: str, value: float = 0, **kwargs):
@@ -148,7 +140,6 @@ class NumberNode(ASTNode):
 
 @dataclass
 class StringNode(ASTNode):
-    """Node untuk string literal"""
     value: str = ""
     
     def __init__(self, node_type: str, value: str = "", **kwargs):
@@ -160,7 +151,6 @@ class StringNode(ASTNode):
 
 @dataclass
 class BooleanNode(ASTNode):
-    """Node untuk boolean literal"""
     value: bool = False
     identifier: str = ""
     
@@ -174,7 +164,6 @@ class BooleanNode(ASTNode):
 
 @dataclass
 class ProcedureCallNode(ASTNode):
-    """Node untuk procedure call"""
     procedure_name: str = ""
     is_user_defined: bool = False
     
@@ -187,7 +176,6 @@ class ProcedureCallNode(ASTNode):
     
 @dataclass
 class CharNode(ASTNode):
-    """Node untuk karakter literal ('A')"""
     value: str = ""
     
     def __init__(self, node_type: str = "Char", value: str = "", **kwargs):
@@ -215,8 +203,6 @@ class UnaryExpressionNode(ASTNode):
 
 @dataclass
 class CompoundStatementNode(ASTNode):
-    """Node untuk compound statement (mulai ... selesai)"""
-    
     def __repr__(self):
         if self.block_index != -1:
             return f"CompoundStatement → block_index:{self.block_index}"
@@ -224,7 +210,6 @@ class CompoundStatementNode(ASTNode):
 
 @dataclass
 class ForStatementNode(ASTNode):
-    """Node untuk for loop"""
     is_downto: bool = False
     
     def __repr__(self):
@@ -238,8 +223,6 @@ class ForStatementNode(ASTNode):
 
 @dataclass
 class IfStatementNode(ASTNode):
-    """Node untuk if statement"""
-    
     def __repr__(self):
         if self.children:
             cond = self.children[0]
@@ -250,8 +233,6 @@ class IfStatementNode(ASTNode):
 
 @dataclass
 class WhileStatementNode(ASTNode):
-    """Node untuk while loop"""
-    
     def __repr__(self):
         if self.children:
             cond = self.children[0]
