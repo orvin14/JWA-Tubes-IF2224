@@ -1,4 +1,4 @@
-program Deklaasi;
+program Deklarasi;
 variabel
   i, j, k : integer;
   rataRata : real;

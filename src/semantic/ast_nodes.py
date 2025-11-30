@@ -85,7 +85,6 @@ class BinaryExpressionNode(ASTNode):
             left = self.children[0]
             right = self.children[1]
             
-            # Translate operator to pretty format
             op_map = {
                 'GT': '>', 'LT': '<', 'GE': '>=', 'LE': '<=', 
                 'EQ': '=', 'NE': '<>', 'AND': ' dan ', 'OR': ' atau ',
@@ -107,7 +106,6 @@ class BinaryExpressionNode(ASTNode):
             left_str = format_operand(left)
             right_str = format_operand(right)
             
-            # Space around certain operators
             if pretty_op in ['+', '-', '*', '/']:
                  return f"{left_str}{pretty_op}{right_str}"
             else:

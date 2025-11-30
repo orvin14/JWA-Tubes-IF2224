@@ -1,4 +1,4 @@
-program Deklaasi;
+program Deklarasi;
 variabel
   i, j, k : integer;
   rataRata : real;
@@ -12,3 +12,5 @@ mulai
   hurufAwal := 'a';
   isValid := tidak (i > 100);
 selesai.
+
+
