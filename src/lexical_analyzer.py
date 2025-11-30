@@ -1,5 +1,6 @@
 import json
 import sys
+from tokens import Token, TokenType
 
 LOOKUP_TABLE = {
     "program": "KEYWORD", 
@@ -7,7 +8,7 @@ LOOKUP_TABLE = {
     "mulai": "KEYWORD", 
     "selesai": "KEYWORD",
     "kasus": "KEYWORD",
-    "rekaman" : "KEYWORD",
+    "rekaman": "KEYWORD",
     "sampai": "KEYWORD",
     "jika": "KEYWORD", "maka": "KEYWORD", "selain_itu": "KEYWORD", "selama": "KEYWORD",
     "lakukan": "KEYWORD", "untuk": "KEYWORD", "ke": "KEYWORD", "turun_ke": "KEYWORD",
@@ -50,17 +51,31 @@ class Lexer:
         return None
 
     def tokenize(self, source_code):
+        """
+        Tokenize source code dan return list of Token objects.
+        Returns: List[Token]
+        """
         tokens = []
         current_pos = 0
+        line = 1
+        column = 1
         
         while current_pos < len(source_code):
+            if source_code[current_pos] == '\n':
+                line += 1
+                column = 1
+                current_pos += 1
+                continue
+                
             if source_code[current_pos] in self.char_classes['whitespace']:
+                column += 1
                 current_pos += 1
                 continue
 
             current_state_name = self.start_state
             last_accepted_state = None
             last_accepted_pos = -1
+            start_column = column
 
             temp_pos = current_pos
             while temp_pos < len(source_code):
@@ -77,31 +92,65 @@ class Lexer:
                     last_accepted_pos = temp_pos
             
             if last_accepted_state:
-                token_type = self.states[last_accepted_state]['token_type']
+                token_type_str = self.states[last_accepted_state]['token_type']
                 lexeme = source_code[current_pos:last_accepted_pos]
 
-                if token_type == 'COMMENT':
+                # Handle comments
+                if token_type_str == 'COMMENT':
                     comment_lexeme = source_code[current_pos:last_accepted_pos]
                     if comment_lexeme.startswith('{'):
-                        tokens.append(('COMMENT_START', '{'))
-                        tokens.append(('COMMENT_END', '}'))
+                        tokens.append(Token(TokenType.COMMENT_START, '{', line, start_column))
+                        tokens.append(Token(TokenType.COMMENT_END, '}', line, start_column))
                     elif comment_lexeme.startswith('(*'):
-                        tokens.append(('COMMENT_START', '(*'))
-                        tokens.append(('COMMENT_END', '*)'))
+                        tokens.append(Token(TokenType.COMMENT_START, '(*', line, start_column))
+                        tokens.append(Token(TokenType.COMMENT_END, '*)', line, start_column))
                     
+                    column += len(lexeme)
                     current_pos = last_accepted_pos
                     continue
                 
-                if token_type == 'IDENTIFIER':
-                    token_type = LOOKUP_TABLE.get(lexeme.lower(), 'IDENTIFIER')
+                # Map string to TokenType enum
+                token_type_map = {
+                    'KEYWORD': TokenType.KEYWORD,
+                    'IDENTIFIER': TokenType.IDENTIFIER,
+                    'NUMBER': TokenType.NUMBER,
+                    'STRING_LITERAL': TokenType.STRING_LITERAL,
+                    'CHAR_LITERAL': TokenType.CHAR_LITERAL,
+                    'ARITHMETIC_OPERATOR': TokenType.ARITHMETIC_OPERATOR,
+                    'RELATIONAL_OPERATOR': TokenType.RELATIONAL_OPERATOR,
+                    'LOGICAL_OPERATOR': TokenType.LOGICAL_OPERATOR,
+                    'ASSIGN_OPERATOR': TokenType.ASSIGN_OPERATOR,
+                    'RANGE_OPERATOR': TokenType.RANGE_OPERATOR,
+                    'SEMICOLON': TokenType.SEMICOLON,
+                    'COLON': TokenType.COLON,
+                    'COMMA': TokenType.COMMA,
+                    'DOT': TokenType.DOT,
+                    'LPARENTHESIS': TokenType.LPARENTHESIS,
+                    'RPARENTHESIS': TokenType.RPARENTHESIS,
+                    'LBRACKET': TokenType.LBRACKET,
+                    'RBRACKET': TokenType.RBRACKET,
+                }
                 
-                tokens.append((token_type, lexeme))
+                if token_type_str == 'IDENTIFIER':
+                    keyword_type = LOOKUP_TABLE.get(lexeme.lower())
+                    if keyword_type:
+                        token_type_str = keyword_type
+                
+                token_type = token_type_map.get(token_type_str, TokenType.UNKNOWN)
+                
+  
+                token = Token(token_type, lexeme, line, start_column)
+                tokens.append(token)
+                
+                column += len(lexeme)
                 current_pos = last_accepted_pos
             else:
                 unknown_char = source_code[current_pos]
-                print(f"Error: Karakter tidak dikenal -> '{unknown_char}' di posisi {current_pos}")
-                tokens.append(('UNKNOWN', unknown_char))
+                print(f"Error: Karakter tidak dikenal -> '{unknown_char}' di posisi line {line}, column {column}")
+                tokens.append(Token(TokenType.UNKNOWN, unknown_char, line, column))
+                column += 1
                 current_pos += 1
-                
-        tokens.append(('EOF', ''))
+        
+
+        tokens.append(Token(TokenType.EOF, '', line, column))
         return tokens

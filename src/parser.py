@@ -1,6 +1,9 @@
-from node import Node
+from typing import List, Optional
+from tokens import Token, TokenType
+from node import ParseNode
+
 class Parser:
-    def __init__(self, tokens):
+    def __init__(self, tokens: List[Token]):  
         if not tokens:
             raise ValueError("Token list is empty! Cannot initialize parser.")
         self.tokens = tokens
@@ -9,8 +12,7 @@ class Parser:
         self.skip_comments()
 
     def skip_comments(self):
-        # Melewatkan token COMMENT_START dan COMMENT_END
-        while self.current_token and self.current_token[0] in ('COMMENT_START', 'COMMENT_END'):
+        while self.current_token and self.current_token.type in (TokenType.COMMENT_START, TokenType.COMMENT_END):
             self.pos += 1
             if self.pos < len(self.tokens):
                 self.current_token = self.tokens[self.pos]
@@ -19,137 +21,138 @@ class Parser:
                 break
 
     def advance(self):
-        # Maju ke token berikutnya
         self.pos += 1
         if self.pos < len(self.tokens):
             self.current_token = self.tokens[self.pos]
             self.skip_comments()
         else:
             self.current_token = None
-            
 
     def peek(self):
-        # Mengintip token berikutnya
         peek_pos = self.pos + 1
         while peek_pos < len(self.tokens):
             token = self.tokens[peek_pos]
-            if token[0] not in ('COMMENT_START', 'COMMENT_END'):
-                return token # Kembalikan token non-komentar pertama
+            if token.type not in (TokenType.COMMENT_START, TokenType.COMMENT_END):
+                return token
             peek_pos += 1
-        return None 
+        return None
 
-    def eat(self, token_type, token_value=None):
-        # Memeriksa token, membuat node terminal, dan maju.
+    def eat(self, token_type: TokenType, token_value=None):
         if (self.current_token and 
-            self.current_token[0] == token_type and
-            (token_value is None or self.current_token[1].lower() == token_value)):
+            self.current_token.type == token_type and
+            (token_value is None or self.current_token.value.lower() == token_value)):
             
             token = self.current_token
             self.advance()
-            
-            node_name = f"{token[0]}({token[1]!r})"
-            return Node(node_name, token)
+            node_name = f"{token.type.name}({token.value!r})"
+            return ParseNode(node_name, token)
         else:
-            expected = f"{token_type} ('{token_value}')" if token_value else token_type
-            found = f"{self.current_token[0]} ('{self.current_token[1]}')" if self.current_token else "EOF"
+            expected = f"{token_type.name} ('{token_value}')" if token_value else token_type.name
+            found = f"{self.current_token.type.name} ('{self.current_token.value}')" if self.current_token else "EOF"
             raise SyntaxError(f"Syntax Error: Expected {expected} but got {found}")
 
     def parse(self):
-        # Mulai proses parsing dari aturan top-level: <program>.
         root = self.parse_program()
-        if self.current_token and self.current_token[0] != 'EOF':
-            token_info = f"{self.current_token[0]} ('{self.current_token[1]}')"
+        if self.current_token and self.current_token.type != TokenType.EOF:
+            token_info = f"{self.current_token.type.name} ('{self.current_token.value}')"
             raise SyntaxError(f"Syntax Error: Unexpected token {token_info} after end of program.")
         root.print_tree()
-
+        return root
 
     def parse_program(self):
-        node = Node("program")
+        node = ParseNode("<program>")
         node.add_child(self.parse_program_header())
         node.add_child(self.parse_declaration_part())
         node.add_child(self.parse_compound_statement())
-        node.add_child(self.eat("DOT"))
+        node.add_child(self.eat(TokenType.DOT))
         return node
 
     def parse_program_header(self):
-        node = Node("program-header")
-        node.add_child(self.eat("KEYWORD", "program"))
-        node.add_child(self.eat("IDENTIFIER"))
-        node.add_child(self.eat("SEMICOLON"))
-        return node
-
-    def parse_declaration_part(self):
-        node = Node("declaration-part")
-        if self.current_token and self.current_token[0] == 'KEYWORD' and self.current_token[1] == 'variabel':
-            node.add_child(self.parse_var_declaration())
+        node = ParseNode("<program-header>")
+        node.add_child(self.eat(TokenType.KEYWORD, "program"))
+        node.add_child(self.eat(TokenType.IDENTIFIER))
+        node.add_child(self.eat(TokenType.SEMICOLON))
         return node
 
     def parse_var_declaration(self):
-        node = Node("var-declaration")
-        node.add_child(self.eat("KEYWORD", "variabel"))
+        node = ParseNode("<var-declaration>")
+        node.add_child(self.eat(TokenType.KEYWORD, "variabel"))
         
-        while self.current_token and self.current_token[0] == 'IDENTIFIER':
-            node.add_child(self.parse_identifier_list())
-            node.add_child(self.eat("COLON"))
-            node.add_child(self.parse_type())
-            node.add_child(self.eat("SEMICOLON"))
+        while (self.current_token and 
+            self.current_token.type == TokenType.IDENTIFIER):
+            node.add_child(self.parse_var_item())
+        
         return node
-
+    
+    def parse_declaration_part(self):
+        node = ParseNode("<declaration-part>")
+        if self.current_token and self.current_token.type == TokenType.KEYWORD and self.current_token.value == 'variabel':
+            node.add_child(self.parse_var_declaration())
+        return node
+    
+    def parse_var_item(self):
+        node = ParseNode("<var-item>")
+        node.add_child(self.parse_identifier_list())
+        node.add_child(self.eat(TokenType.COLON))
+        node.add_child(self.parse_type())
+        node.add_child(self.eat(TokenType.SEMICOLON))
+        return node
+    
     def parse_identifier_list(self):
-        node = Node("identifier-list")
-        node.add_child(self.eat("IDENTIFIER"))
-        while self.current_token and self.current_token[0] == 'COMMA':
-            node.add_child(self.eat("COMMA"))
-            node.add_child(self.eat("IDENTIFIER"))
+        node = ParseNode("<identifier-list>")
+        node.add_child(self.eat(TokenType.IDENTIFIER))
+        while self.current_token and self.current_token.type == TokenType.COMMA:
+            node.add_child(self.eat(TokenType.COMMA))
+            node.add_child(self.eat(TokenType.IDENTIFIER))
         return node
 
     def parse_type(self):
-        node = Node("type")
-        if self.current_token[0] == 'KEYWORD' and self.current_token[1] in ['integer', 'real', 'boolean', 'char']:
-            node.add_child(self.eat("KEYWORD", self.current_token[1]))
-        elif self.current_token[0] == 'KEYWORD' and self.current_token[1] == 'larik':
+        node = ParseNode("<type>")
+        if self.current_token.type == TokenType.KEYWORD and self.current_token.value in ['integer', 'real', 'boolean', 'char']:
+            node.add_child(self.eat(TokenType.KEYWORD, self.current_token.value))
+        elif self.current_token.type == TokenType.KEYWORD and self.current_token.value == 'larik':
             node.add_child(self.parse_array_type())
         else:
-            token_info = f"{self.current_token[0]} ('{self.current_token[1]}')" if self.current_token else "EOF"
-            raise SyntaxError(f"Syntax Error: Expected type specification (integer, real, larik, ...) but got {token_info}")
+            token_info = f"{self.current_token.type.name} ('{self.current_token.value}')" if self.current_token else "EOF"
+            raise SyntaxError(f"Syntax Error: Expected type specification but got {token_info}")
         return node
 
     def parse_array_type(self):
-        node = Node("array-type")
-        node.add_child(self.eat("KEYWORD", "larik"))
-        node.add_child(self.eat("LBRACKET"))
+        node = ParseNode("<array-type>")
+        node.add_child(self.eat(TokenType.KEYWORD, "larik"))
+        node.add_child(self.eat(TokenType.LBRACKET))
         node.add_child(self.parse_range())
-        node.add_child(self.eat("RBRACKET"))
-        node.add_child(self.eat("KEYWORD", "dari"))
+        node.add_child(self.eat(TokenType.RBRACKET))
+        node.add_child(self.eat(TokenType.KEYWORD, "dari"))
         node.add_child(self.parse_type())
         return node
     
     def parse_range(self):
-        node = Node("range")
+        node = ParseNode("<range>")
         node.add_child(self.parse_expression())
-        node.add_child(self.eat("RANGE_OPERATOR"))
+        node.add_child(self.eat(TokenType.RANGE_OPERATOR))
         node.add_child(self.parse_expression())
         return node
 
     def parse_compound_statement(self):
-        node = Node("compound-statement")
-        node.add_child(self.eat("KEYWORD", "mulai"))
+        node = ParseNode("<compound-statement>")
+        node.add_child(self.eat(TokenType.KEYWORD, "mulai"))
         node.add_child(self.parse_statement_list())
-        node.add_child(self.eat("KEYWORD", "selesai"))
+        node.add_child(self.eat(TokenType.KEYWORD, "selesai"))
         return node
 
     def parse_statement_list(self):
-        node = Node("statement-list")
+        node = ParseNode("<statement-list>")
         
-        if self.current_token and self.current_token[0] == 'KEYWORD' and self.current_token[1] == 'selesai':
-            return node 
+        if self.current_token and self.current_token.type == TokenType.KEYWORD and self.current_token.value == 'selesai':
+            return node
 
-        node.add_child(self.parse_statement()) 
+        node.add_child(self.parse_statement())
         
-        while self.current_token and self.current_token[0] == 'SEMICOLON':
-            node.add_child(self.eat("SEMICOLON"))
+        while self.current_token and self.current_token.type == TokenType.SEMICOLON:
+            node.add_child(self.eat(TokenType.SEMICOLON))
             
-            if self.current_token and self.current_token[0] == 'KEYWORD' and self.current_token[1] == 'selesai':
+            if self.current_token and self.current_token.type == TokenType.KEYWORD and self.current_token.value == 'selesai':
                 break
                 
             node.add_child(self.parse_statement())
@@ -157,19 +160,19 @@ class Parser:
         return node
 
     def parse_statement(self):
-        if not self.current_token or (self.current_token[0] == 'KEYWORD' and self.current_token[1] == 'selesai'):
-            return Node("empty-statement") 
+        if not self.current_token or (self.current_token.type == TokenType.KEYWORD and self.current_token.value == 'selesai'):
+            return ParseNode("<empty-statement>")
 
-        if self.current_token[0] == 'IDENTIFIER':
-            next_token = self.peek() 
+        if self.current_token.type == TokenType.IDENTIFIER:
+            next_token = self.peek()
             
-            if next_token and next_token[0] == 'ASSIGN_OPERATOR':
+            if next_token and next_token.type == TokenType.ASSIGN_OPERATOR:
                 return self.parse_assignment_statement()
             else:
                 return self.parse_procedure_or_function_call()
                 
-        elif self.current_token[0] == 'KEYWORD':
-            val = self.current_token[1]
+        elif self.current_token.type == TokenType.KEYWORD:
+            val = self.current_token.value
             if val == 'jika':
                 return self.parse_if_statement()
             elif val == 'selama':
@@ -179,149 +182,190 @@ class Parser:
             elif val == 'mulai':
                 return self.parse_compound_statement()
             else:
-                return Node("empty-statement")
+                return ParseNode("<empty-statement>")
         else:
-            return Node("empty-statement")
+            return ParseNode("<empty-statement>")
 
     def parse_assignment_statement(self):
-        node = Node("assignment-statement")
-        node.add_child(self.eat("IDENTIFIER"))
-        node.add_child(self.eat("ASSIGN_OPERATOR"))
+        node = ParseNode("<assignment-statement>")
+        node.add_child(self.eat(TokenType.IDENTIFIER))
+        node.add_child(self.eat(TokenType.ASSIGN_OPERATOR))
         node.add_child(self.parse_expression())
         return node
     
     def parse_parameter_list(self):
-        node = Node("parameter-list")
+        node = ParseNode("<parameter-list>")
         node.add_child(self.parse_expression())
-        while self.current_token and self.current_token[0] == 'COMMA':
-            node.add_child(self.eat("COMMA"))
+        while self.current_token and self.current_token.type == TokenType.COMMA:
+            node.add_child(self.eat(TokenType.COMMA))
             node.add_child(self.parse_expression())
         return node
 
     def parse_if_statement(self):
-        node = Node("if-statement")
-        node.add_child(self.eat("KEYWORD", "jika"))
+        node = ParseNode("<if-statement>")
+        node.add_child(self.eat(TokenType.KEYWORD, "jika"))
         node.add_child(self.parse_expression())
-        node.add_child(self.eat("KEYWORD", "maka"))
+        node.add_child(self.eat(TokenType.KEYWORD, "maka"))
         node.add_child(self.parse_statement())
-        if self.current_token and self.current_token[0] == 'KEYWORD' and self.current_token[1] == 'selain_itu':
-            node.add_child(self.eat("KEYWORD", "selain_itu"))
+        if self.current_token and self.current_token.type == TokenType.KEYWORD and self.current_token.value == 'selain_itu':
+            node.add_child(self.eat(TokenType.KEYWORD, "selain_itu"))
             node.add_child(self.parse_statement())
         return node
     
     def parse_while_statement(self):
-        node = Node("while-statement")
-        node.add_child(self.eat("KEYWORD", "selama"))
+        node = ParseNode("<while-statement>")
+        node.add_child(self.eat(TokenType.KEYWORD, "selama"))
         node.add_child(self.parse_expression())
-        node.add_child(self.eat("KEYWORD", "lakukan"))
+        node.add_child(self.eat(TokenType.KEYWORD, "lakukan"))
         node.add_child(self.parse_statement())
         return node
         
     def parse_for_statement(self):
-        node = Node("for-statement")
-        node.add_child(self.eat("KEYWORD", "untuk"))
-        node.add_child(self.eat("IDENTIFIER"))
-        node.add_child(self.eat("ASSIGN_OPERATOR"))
+        node = ParseNode("<for-statement>")
+        node.add_child(self.eat(TokenType.KEYWORD, "untuk"))
+        node.add_child(self.eat(TokenType.IDENTIFIER))
+        node.add_child(self.eat(TokenType.ASSIGN_OPERATOR))
         node.add_child(self.parse_expression())
         
-        if self.current_token and self.current_token[0] == 'KEYWORD' and self.current_token[1] == 'ke':
-            node.add_child(self.eat("KEYWORD", "ke"))
-        elif self.current_token and self.current_token[0] == 'KEYWORD' and self.current_token[1] == 'turun_ke':
-            node.add_child(self.eat("KEYWORD", "turun_ke"))
+        if self.current_token and self.current_token.type == TokenType.KEYWORD and self.current_token.value == 'ke':
+            node.add_child(self.eat(TokenType.KEYWORD, "ke"))
+        elif self.current_token and self.current_token.type == TokenType.KEYWORD and self.current_token.value == 'turun_ke':
+            node.add_child(self.eat(TokenType.KEYWORD, "turun_ke"))
         else:
             raise SyntaxError("Syntax Error: Expected 'ke' or 'turun_ke' in for loop")
             
         node.add_child(self.parse_expression())
-        node.add_child(self.eat("KEYWORD", "lakukan"))
+        node.add_child(self.eat(TokenType.KEYWORD, "lakukan"))
         node.add_child(self.parse_statement())
         return node
 
     def parse_expression(self):
-        node = Node("expression")
+        """
+        <expression> ::= <simple-expression> [<relational-op> <simple-expression>]
+        Level 1 (terendah): Relational operators (>, <, =, dll)
+        """
+        node = ParseNode("<expression>")
         node.add_child(self.parse_simple_expression())
-        if self.current_token and self.current_token[0] == 'RELATIONAL_OPERATOR':
-            rel_op_node = self.eat("RELATIONAL_OPERATOR")
+        
+        if self.current_token and self.current_token.type == TokenType.RELATIONAL_OPERATOR:
+            rel_op_node = self.eat(TokenType.RELATIONAL_OPERATOR)
             node.add_child(rel_op_node)
             node.add_child(self.parse_simple_expression())
+        
         return node
 
     def parse_simple_expression(self):
-        node = Node("simple-expression")
+
+        node = ParseNode("<simple-expression>")
         
-        if self.current_token and self.current_token[0] == 'ARITHMETIC_OPERATOR' and self.current_token[1] in ['+', '-']:
-            node.add_child(self.eat("ARITHMETIC_OPERATOR", self.current_token[1]))
-            
-        node.add_child(self.parse_term())
+        # Handle unary +/-
+        if (self.current_token and 
+            self.current_token.type == TokenType.ARITHMETIC_OPERATOR and 
+            self.current_token.value in ['+', '-']):
+            node.add_child(self.eat(TokenType.ARITHMETIC_OPERATOR, self.current_token.value))
+
+        node.add_child(self.parse_or_term())
         
         while (self.current_token and 
-               ( (self.current_token[0] == 'ARITHMETIC_OPERATOR' and self.current_token[1] in ['+', '-']) or 
-                 (self.current_token[0] == 'LOGICAL_OPERATOR' and self.current_token[1] == 'atau') ) ):
-            if self.current_token[1] == 'atau':
-                node.add_child(self.eat("LOGICAL_OPERATOR", "atau"))
-            else:
-                node.add_child(self.eat("ARITHMETIC_OPERATOR", self.current_token[1]))
+               self.current_token.type == TokenType.LOGICAL_OPERATOR and 
+               self.current_token.value == 'atau'):
+            node.add_child(self.eat(TokenType.LOGICAL_OPERATOR, "atau"))
+            node.add_child(self.parse_or_term())
+        
+        return node
+
+    def parse_or_term(self):
+        """
+        <or-term> ::= <term> { ('+'|'-') <term> }
+        Level 3: Additive operators (+, -)
+        """
+        node = ParseNode("<or-term>")
+        node.add_child(self.parse_term())
+        
+        # Handle +/- operators (HANYA +/-, TIDAK campur 'atau')
+        while (self.current_token and 
+               self.current_token.type == TokenType.ARITHMETIC_OPERATOR and 
+               self.current_token.value in ['+', '-']):
+            node.add_child(self.eat(TokenType.ARITHMETIC_OPERATOR, self.current_token.value))
             node.add_child(self.parse_term())
+        
         return node
 
     def parse_term(self):
-        node = Node("term")
+        """
+        <term> ::= <and-factor> { 'dan' <and-factor> }
+        Level 4: Logical AND (precedence tinggi, setara *)
+        """
+        node = ParseNode("<term>")
+        node.add_child(self.parse_and_factor())
+        
+        # Handle 'dan' operator (HANYA dan, TIDAK campur */div/mod)
+        while (self.current_token and
+               self.current_token.type == TokenType.LOGICAL_OPERATOR and
+               self.current_token.value == 'dan'):
+            node.add_child(self.eat(TokenType.LOGICAL_OPERATOR, "dan"))
+            node.add_child(self.parse_and_factor())
+        
+        return node
+
+    def parse_and_factor(self):
+        """
+        <and-factor> ::= <factor> { ('*'|'/'|'bagi'|'mod') <factor> }
+        Level 5 (tertinggi): Multiplicative operators (*, /, bagi, mod)
+        """
+        node = ParseNode("<and-factor>")
         node.add_child(self.parse_factor())
         
         while (self.current_token and
-               ( (self.current_token[0] == 'ARITHMETIC_OPERATOR' and self.current_token[1] in ['*', '/', 'bagi', 'mod']) or
-                 (self.current_token[0] == 'LOGICAL_OPERATOR' and self.current_token[1] == 'dan') ) ):
-            
-            if self.current_token[1] in ['*', '/']:
-                node.add_child(self.eat("ARITHMETIC_OPERATOR", self.current_token[1]))
-            elif self.current_token[1] in ['bagi', 'mod']:
-                 node.add_child(self.eat("ARITHMETIC_OPERATOR", self.current_token[1]))
-            elif self.current_token[1] == 'dan':
-                 node.add_child(self.eat("LOGICAL_OPERATOR", "dan"))
-                 
+               self.current_token.type == TokenType.ARITHMETIC_OPERATOR and
+               self.current_token.value in ['*', '/', 'bagi', 'mod']):
+            node.add_child(self.eat(TokenType.ARITHMETIC_OPERATOR, self.current_token.value))
             node.add_child(self.parse_factor())
+        
         return node
 
+
     def parse_factor(self):
-        node = Node("factor")
+        node = ParseNode("<factor>")
         
         if not self.current_token:
             raise SyntaxError("Syntax Error: Unexpected EOF, expected a factor")
 
-        if self.current_token[0] == 'IDENTIFIER':
+        if self.current_token.type == TokenType.IDENTIFIER:
             next_token = self.peek()
             
-            if next_token and next_token[0] == 'LPARENTHESIS':
+            if next_token and next_token.type == TokenType.LPARENTHESIS:
                 return self.parse_procedure_or_function_call()
             else:
-                node.add_child(self.eat("IDENTIFIER"))
-        elif self.current_token[0] == 'NUMBER':
-            node.add_child(self.eat("NUMBER"))
-        elif self.current_token[0] == 'CHAR_LITERAL':
-            node.add_child(self.eat("CHAR_LITERAL"))
-        elif self.current_token[0] == 'STRING_LITERAL':
-            node.add_child(self.eat("STRING_LITERAL"))
-        elif self.current_token[0] == 'LPARENTHESIS':
-            node.add_child(self.eat("LPARENTHESIS"))
-            node.add_child(self.parse_expression()) 
-            node.add_child(self.eat("RPARENTHESIS"))
-        elif self.current_token[0] == 'LOGICAL_OPERATOR' and self.current_token[1] == 'tidak':
-            node.add_child(self.eat("LOGICAL_OPERATOR", "tidak"))
-            node.add_child(self.parse_factor()) 
+                node.add_child(self.eat(TokenType.IDENTIFIER))
+        elif self.current_token.type == TokenType.NUMBER:
+            node.add_child(self.eat(TokenType.NUMBER))
+        elif self.current_token.type == TokenType.CHAR_LITERAL:
+            node.add_child(self.eat(TokenType.CHAR_LITERAL))
+        elif self.current_token.type == TokenType.STRING_LITERAL:
+            node.add_child(self.eat(TokenType.STRING_LITERAL))
+        elif self.current_token.type == TokenType.LPARENTHESIS:
+            node.add_child(self.eat(TokenType.LPARENTHESIS))
+            node.add_child(self.parse_expression())
+            node.add_child(self.eat(TokenType.RPARENTHESIS))
+        elif self.current_token.type == TokenType.LOGICAL_OPERATOR and self.current_token.value == 'tidak':
+            node.add_child(self.eat(TokenType.LOGICAL_OPERATOR, "tidak"))
+            node.add_child(self.parse_factor())
         else:
-            token_info = f"{self.current_token[0]} ('{self.current_token[1]}')" if self.current_token else "EOF"
-            raise SyntaxError(f"Syntax Error: Expected factor (ID, Number, '(', 'tidak', ...) but got {token_info}")
+            token_info = f"{self.current_token.type.name} ('{self.current_token.value}')" if self.current_token else "EOF"
+            raise SyntaxError(f"Syntax Error: Expected factor but got {token_info}")
         return node
         
     def parse_procedure_or_function_call(self):
-        node = Node("procedure/function-call") 
+        node = ParseNode("procedure/function-call")
         
-        if self.current_token[0] == 'IDENTIFIER':
-            node.add_child(self.eat("IDENTIFIER"))
+        if self.current_token.type == TokenType.IDENTIFIER:
+            node.add_child(self.eat(TokenType.IDENTIFIER))
         else:
-            raise SyntaxError(f"Syntax Error: Expected procedure or function name but got {self.current_token[0]}")
+            raise SyntaxError(f"Syntax Error: Expected procedure or function name")
 
-        node.add_child(self.eat("LPARENTHESIS"))
-        if self.current_token and self.current_token[0] != 'RPARENTHESIS':
-            node.add_child(self.parse_parameter_list())    
-        node.add_child(self.eat("RPARENTHESIS"))
+        node.add_child(self.eat(TokenType.LPARENTHESIS))
+        if self.current_token and self.current_token.type != TokenType.RPARENTHESIS:
+            node.add_child(self.parse_parameter_list())
+        node.add_child(self.eat(TokenType.RPARENTHESIS))
         return node
