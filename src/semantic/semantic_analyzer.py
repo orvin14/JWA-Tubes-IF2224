@@ -442,13 +442,13 @@ class SemanticAnalyzer:
         
         for i, child in enumerate(node.children):
             name = self.clean_name(child.name)
-            print(f"Child {i}: {child.name} (cleaned: {name})")
+            # print(f"Child {i}: {child.name} (cleaned: {name})")
             
             if name == "statement-list":
-                print(f"  → Visiting statement-list...")
+                # print(f"  → Visiting statement-list...")
                 stmt_list = self.visit(child)
                 for stmt in stmt_list.children:
-                    print(f"    → Adding statement: {stmt.name if hasattr(stmt, 'name') else type(stmt)}")
+                    # print(f"    → Adding statement: {stmt.name if hasattr(stmt, 'name') else type(stmt)}")
                     ast_node.add_child(stmt)
         
         return ast_node
@@ -457,15 +457,15 @@ class SemanticAnalyzer:
         
         for i, child in enumerate(node.children):
             child_name = self.clean_name(child.name)
-            print(f"Child {i}: {child.name} (cleaned: {child_name})")
+            # print(f"Child {i}: {child.name} (cleaned: {child_name})")
             
             if child_name == "SEMICOLON" or child.name.startswith("SEMICOLON"):
                     continue
             # Dispatch ke method yang tepat
             if child_name == "assignment-statement":
-                print(f"  → Calling visit_assignment_statement")
+                # print(f"  → Calling visit_assignment_statement")
                 stmt = self.visit_assignment_statement(child)
-                print(f"  → Got: {type(stmt).__name__}, name={stmt.name if hasattr(stmt, 'name') else 'N/A'}")
+                # print(f"  → Got: {type(stmt).__name__}, name={stmt.name if hasattr(stmt, 'name') else 'N/A'}")
                 ast_node.add_child(stmt)
                 
             elif child_name == "if-statement":
@@ -489,17 +489,17 @@ class SemanticAnalyzer:
                 ast_node.add_child(stmt)
                 
             elif child_name == "SEMICOLON":
-                print(f"  → Skipping SEMICOLON")
+                # print(f"  → Skipping SEMICOLON")
                 continue
                 
             else:
-                print(f"  → FALLBACK: calling visit() for {child_name}")
+                # print(f"  → FALLBACK: calling visit() for {child_name}")
                 stmt = self.visit(child)
-                print(f"  → Got: {type(stmt).__name__}, name={stmt.name if hasattr(stmt, 'name') else 'N/A'}")
+                # print(f"  → Got: {type(stmt).__name__}, name={stmt.name if hasattr(stmt, 'name') else 'N/A'}")
                 if stmt and stmt.name != "SEMICOLON":
                         ast_node.add_child(stmt)
                 
-        print(f"StatementList final children count: {len(ast_node.children)}")
+        # print(f"StatementList final children count: {len(ast_node.children)}")
         return ast_node
     # def visit_assignment_statement(self, node: ParseNode) -> ASTNode:
     #     if len(node.children) < 3:
@@ -546,11 +546,11 @@ class SemanticAnalyzer:
     #     return assign_node
     def visit_assignment_statement(self, node: ParseNode) -> ASTNode:
         if len(node.children) < 3:
-            print("  → ERROR: Not enough children!")
+            # print("  → ERROR: Not enough children!")
             return AssignmentNode("Assignment", data_type=BaseType.VOID)
 
-        for i, child in enumerate(node.children):
-            print(f"  Child {i}: {child.name}")
+        # for i, child in enumerate(node.children):
+        #     print(f"  Child {i}: {child.name}")
 
         target_child = node.children[0]
         assign_child = node.children[1]
@@ -559,28 +559,28 @@ class SemanticAnalyzer:
         # Target Identifier
         if target_child.name.startswith("IDENTIFIER") and target_child.token:
             var_name = target_child.token.value
-            print(f"  → Target variable: {var_name}")
+            # print(f"  → Target variable: {var_name}")
             var_idx = self.symbol_table.find_identifier(var_name)
             
             if var_idx is not None:
                 var_type = BaseType(self.symbol_table.tab[var_idx]["type"])
-                print(f"  → Found in symbol table: idx={var_idx}, type={var_type}")
+                # print(f"  → Found in symbol table: idx={var_idx}, type={var_type}")
                 target_node = VariableNode("Variable", identifier=var_name,
                                         token=target_child.token, data_type=var_type,
                                         tab_index=var_idx)
             else:
-                print(f"  → ERROR: Variable not found!")
+                # print(f"  → ERROR: Variable not found!")
                 self.error(f"Undefined variable '{var_name}'", target_child.token)
                 target_node = VariableNode("Variable", identifier=var_name,
                                         token=target_child.token, data_type=BaseType.VOID)
         else:
-            print(f"  → ERROR: Target is not IDENTIFIER!")
+            # print(f"  → ERROR: Target is not IDENTIFIER!")
             target_node = ASTNode("UnknownTarget")
 
         # Value Expression
-        print(f"  → Visiting expression...")
+        # print(f"  → Visiting expression...")
         value_node = self.visit(expr_child)
-        print(f"  → Expression result: {type(value_node).__name__}")
+        # print(f"  → Expression result: {type(value_node).__name__}")
 
         if (hasattr(target_node, 'data_type') and target_node.data_type != BaseType.VOID and 
             value_node.data_type != BaseType.VOID):
@@ -594,7 +594,7 @@ class SemanticAnalyzer:
         if hasattr(target_node, 'identifier'):
             assign_node.identifier = target_node.identifier
 
-        print(f"  → Created AssignmentNode with {len(assign_node.children)} children")
+        # print(f"  → Created AssignmentNode with {len(assign_node.children)} children")
         return assign_node
     def visit_expression(self, node: ParseNode) -> ASTNode:
         if len(node.children) == 1:

@@ -177,7 +177,6 @@ def print_symbol_tables(analyzer: SemanticAnalyzer):
         if entry is not None:
             obj_name = entry['obj'].name if hasattr(entry['obj'], 'name') else str(entry['obj'])
             
-            # Convert type to name
             from .symbol_table import BaseType
             try:
                 type_name = BaseType(entry['type']).name if isinstance(entry['type'], int) else str(entry['type'])
